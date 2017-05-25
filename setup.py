@@ -17,14 +17,15 @@ with open(path.join(here, 'README.rst'), encoding='utf-8') as f:
     long_description = f.read()
 
 setup(
-    name='sandbox',
+    name='quantum_memories',
 
     # Versions should comply with PEP440.  For a discussion on single-sourcing
     # the version across setup.py and the project code, see
     # https://packaging.python.org/en/latest/single_source_version.html
     version='0.1',
 
-    description='The place for tests.',
+    description=r"""a repository for solvers for the Maxwell-Bloch equations \
+    of various quantum memories, and calculations using them""",
     long_description=long_description,
 
     # The project's main homepage.
@@ -32,7 +33,7 @@ setup(
 
     # Author details
     author='Oscar Gerardo Lazo Arjona',
-    author_email='algebraicamente@gmail.com',
+    author_email='oscar.lazoarjona@physics.ox.ac.uk',
 
     # Choose your license
     license='License :: OSI Approved :: GNU General Public License v3 (GPLv3)',
@@ -43,7 +44,7 @@ setup(
         #   3 - Alpha
         #   4 - Beta
         #   5 - Production/Stable
-        'Development Status :: 1 - Planning',
+        'Development Status :: 3 - Alpha',
 
         # Indicate who your project is intended for
         'Intended Audience :: Science/Research',
@@ -58,7 +59,7 @@ setup(
     ],
 
     # What does your project relate to?
-    keywords='atomic-physics',
+    keywords='atomic-physics quantum-memories',
 
     # You can just specify the packages manually here if your project is
     # simple. Or you can use find_packages().

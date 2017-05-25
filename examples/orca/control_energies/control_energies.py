@@ -17,11 +17,10 @@ from multiprocessing import Pool, cpu_count
 from scipy.optimize import minimize
 from time import time
 
-from error_propagation import Measurement
-from settings_ladder import optimize
-from misc import set_parameters_ladder
-from orca_solver import efficiencies_r1r2t0w
-from orca_solver import efficiencies_t0wenergies
+from quantum_memories.misc import set_parameters_ladder, Measurement
+from quantum_memories.orca import efficiencies_r1r2t0w
+from quantum_memories.orca import efficiencies_t0wenergies
+from quantum_memories.settings_ladder import optimize
 
 
 def chi2(xx):
