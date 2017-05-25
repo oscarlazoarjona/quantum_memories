@@ -77,7 +77,8 @@ def chi2(xx):
     plt.savefig("efficiencies.png", bbox_inches="tight")
     plt.close("all")
 
-    print xx, chi22, time() - t0
+    if optimize:
+        print xx, chi22, time() - t0
     return chi22
 
 
