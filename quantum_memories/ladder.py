@@ -4,14 +4,13 @@
 #              <oscar.lazoarjona@physics.ox.ac.uk>                      *
 # ***********************************************************************
 
-"""This is a library for simulations of the ORCA memory [1].
+"""This is a solver for Maxwell-Bloch equations for a three level ladder system
+driven by two optical fields under the rotating wave approximation. An
+arbitrary number of velocity groups are allowed. These are coupled, partial,
+first order differential equations.
 
-The equations under the linear approximation are solved for an arbitrary number
-of coupled velocity classes. For a detailed derivation of the equations see
-the jupyter notebook included "Ladder memory complete equations.ipynb".
-
-The solver is called, and it returns a solution. The solution can then
-be analysed by various other functions.
+For a detailed derivation of the equations see the jupyter notebook included
+"Ladder memory equations.ipynb".
 
 References:
     [1] https://arxiv.org/abs/1704.00013
@@ -24,9 +23,10 @@ from matplotlib import rcParams
 
 from misc import cheb, cDz, simple_complex_plot, set_parameters_ladder
 from misc import efficiencies, vapour_number_density
-from scipy.constants import physical_constants
+import warnings
 
-a0 = physical_constants["Bohr radius"][0]
+warnings.filterwarnings("error")
+
 # We set matplotlib to use a nice latex font.
 rcParams['mathtext.fontset'] = 'cm'
 rcParams['mathtext.rm'] = 'serif'
@@ -151,21 +151,22 @@ def solve(params, plots=False, name=""):
 
     ##################################################
     # We initialize the solutions.
+    Nrho = 6
     if keep_data == "all":
         # t_sample = np.linspace(0, T, Nt)
         t_sample = t
-        Om1 = np.zeros((Nt, Nz), complex)
+        Om = np.zeros((Nt, 2, Nz), complex)
         rho = np.zeros((Nt, Nrho, Nv, Nz), complex)
         # output = np.zeros(Nt, complex)
     elif keep_data == "sample":
         # t_sample = np.linspace(0, T, Nt/sampling_rate)
         t_sample = np.linspace(0, T, Nt/sampling_rate)
-        Om1 = np.zeros((Nt/sampling_rate, Nz), complex)
+        Om = np.zeros((Nt/sampling_rate, 2, Nz), complex)
         rho = np.zeros((Nt/sampling_rate, Nrho, Nv, Nz), complex)
         # output = np.zeros(Nt/sampling_rate, complex)
     elif keep_data == "current":
         # t_sample = np.zeros(1)
-        Om1 = np.zeros((1, Nz), complex)
+        Om = np.zeros((1, 2, Nz), complex)
         rho = np.zeros((1, Nrho, Nv, Nz), complex)
         # output = np.zeros(1, complex)
     else:
@@ -209,43 +210,41 @@ def solve(params, plots=False, name=""):
         plt.savefig("params_n_atomic_"+name+".png", bbox_inches="tight")
         plt.close("all")
 
-        const2 = np.pi*c*epsilon_0*hbar*(w2/e_charge/r2)**2/16.0/omega_laser2
-        Om2_mesh = [Omega2(ti, Z, Omega2_peak, tau2, t0w, t0r, alpha_rw)
-                    for ti in t_sample]
-        Om2_mesh = np.array(Om2_mesh)
-        Om2_mesh = const2*Om2_mesh**2
-
-        cp = plt.pcolormesh(Z/distance_unit*100, t_sample*Omega*1e9,
-                            Om2_mesh*1e-9)
-        plt.colorbar(cp)
-        plt.plot([-L/2/distance_unit*100, -L/2/distance_unit*100],
-                 [0, T*Omega*1e9], "r-", linewidth=1)
-        plt.plot([L/2/distance_unit*100, L/2/distance_unit*100],
-                 [0, T*Omega*1e9], "r-", linewidth=1)
-        plt.xlabel(r"$ Z \ (\mathrm{cm})$", fontsize=20)
-        plt.ylabel(r"$ t \ (\mathrm{ns})$", fontsize=20)
-        plt.savefig("params_Om2_"+name+".png", bbox_inches="tight")
-        plt.close("all")
-
-        del Om2_mesh
-
     ##################################################
     # We establish the boundary and initial conditions.
+    # The signal pulse at Z = -D/2
     Omega1_boundary = Omega1_peak*np.exp(-4*np.log(2.0) *
                                          (t - t0s + D/2/c)**2/tau1**2)
+
+    # The control pulses at Z = D/2
+    Omega2_boundary = Omega2_peak*np.exp(-4*np.log(2.0) *
+                                         (t - t0w + D/2/c)**2/tau2**2)
+    Omega2_boundary += alpha_rw*Omega2_peak * \
+        np.exp(-4*np.log(2.0)*(t - t0r + D/2/c)**2/tau2**2)
+
     # The signal pulse at t = 0 is
     Omega1_initial = Omega1_peak*np.exp(-4*np.log(2.0)*(-t0s-Z/c)**2/tau1**2)
-    # print t0s, D, c, tau1, t[0], t[-1]
-    # print len(Omega1_initial)
+    # The control pulses at t = 0 is
+    Omega2_initial = Omega2_peak*np.exp(-4*np.log(2.0)*(-t0w+Z/c)**2/tau2**2)
+    Omega2_initial += alpha_rw*Omega2_peak * \
+        np.exp(-4*np.log(2.0)*(-t0r+Z/c)**2/tau2**2)
 
-    Om1[0] = Omega1_initial
+    # We establish the Rabi frequencies.
+    Om[0][0] = Omega1_initial
+    Om[0][1] = Omega2_initial
+    # All the population initially at |1> with no coherences.
+    rho[0][0] = 1.0
 
     # The coupling coefficient for the signal field.
     g1 = omega_laser1*(e_charge*r1)**2/(hbar*epsilon_0)
+    g2 = omega_laser2*(e_charge*r2)**2/(hbar*epsilon_0)
+
+    const1 = np.pi*c*epsilon_0*hbar*(w1/e_charge/r1)**2/16.0/omega_laser1
+    const2 = np.pi*c*epsilon_0*hbar*(w2/e_charge/r2)**2/16.0/omega_laser2
     # The detuning of the control field.
     delta2 = -delta1
 
-    params = (delta1, delta2, gamma21, gamma32, g1,
+    params = (delta1, delta2, gamma21, gamma32, g1, g2,
               Omega2_peak, tau2, t0w, t0r, alpha_rw,
               p, vZ, Z, n_atomic, cheb_diff_mat, c, Nv,
               omega_laser1, omega_laser2)
@@ -263,101 +262,121 @@ def solve(params, plots=False, name=""):
     # print r1/a0
     # print hbar, epsilon_0, c
 
-    def f(rhoi, Om1i, ti, params, flag=False):
+    def f(rhoi, Omi, ti, params, flag=False):
         # We unpack the parameters.
-        delta1, delta2, gamma21, gamma32, g1 = params[:5]
-        Omega2_peak, tau2, t0w, t0r, alpha_rw = params[5:10]
-        p, vZ, Z, n_atomic, cheb_diff_mat, c, Nv = params[10:17]
-        omega_laser1, omega_laser2 = params[17:]
+        delta1, delta2, gamma21, gamma32, g1, g2 = params[:6]
+        Omega2_peak, tau2, t0w, t0r, alpha_rw = params[6:11]
+        p, vZ, Z, n_atomic, cheb_diff_mat, c, Nv = params[11:18]
+        omega_laser1, omega_laser2 = params[18:]
 
         # We unpack the density matrix components.
-        rho21i = rhoi[0]
-        rho31i = rhoi[1]
-        Nv = len(rho21i)
+        rho11i = rhoi[0]
+        rho22i = rhoi[1]
+        rho33i = rhoi[2]
 
-        # We calculate the control field at time ti.
-        Om2i = Omega2(ti, Z, Omega2_peak, tau2, t0w, t0r, alpha_rw)
+        rho21i = rhoi[3]
+        rho31i = rhoi[4]
+        rho32i = rhoi[5]
+        Nv = len(rho11i)
 
-        # We calculate the right-hand sides of equations 1 and 2 for all
+        # We unpack the Rabi frequencies.
+        Om1i = Omi[0]
+        Om2i = Omi[1]
+
+        Om1ic = Om1i.conjugate()
+        Om2ic = Om2i.conjugate()
+
+        # We calculate the right-hand sides of equations 1 through 6 for all
         # velocity groups.
-        eq1 = np.zeros((Nv, Nz), complex)
-        eq2 = np.zeros((Nv, Nz), complex)
+        eqs_rho = np.zeros((6, Nv, Nz), complex)
+        eqs_Om = np.zeros((2, Nz), complex)
         for jj in range(Nv):
+            rho11ij = rho11i[jj]
+            rho22ij = rho22i[jj]
+            rho33ij = rho33i[jj]
+
             rho21ij = rho21i[jj]
             rho31ij = rho31i[jj]
+            rho32ij = rho32i[jj]
 
-            eq1j = (1j*delta1-gamma21/2)*rho21ij
-            eq1j += -1j/2.0*Om2i.conjugate()*rho31ij
-            eq1j += -1j/2.0*(Om1i)
-            # Doppler term:
-            eq1j += -1j*vZ[jj]*omega_laser1/c*rho21ij
+            rho21ijc = rho21ij.conjugate()
+            # rho31ijc = rho31ij.conjugate()
+            rho32ijc = rho32ij.conjugate()
 
-            eq2j = -1j/2.0*Om2i*rho21ij
-            eq2j += (1j*delta1 + 1j*delta2 - gamma32/2)*rho31ij
-            # Doppler terms:
-            eq2j += (omega_laser2 - omega_laser1)*1j*vZ[jj]/c*rho31ij
+            # Equation 1 (d rho11ij / dt)
+            eqs_rho[0, jj, :] += 0.5j*(Om1i*rho21ijc-Om1ic*rho21ij)
+            eqs_rho[0, jj, :] += gamma21*rho22ij
 
-            eq1[jj] = eq1j
-            eq2[jj] = eq2j
+            # Equation 2 (d rho22ij / dt)
+            eqs_rho[1, jj, :] += -0.5j*(Om1i*rho21ijc-Om1ic*rho21ij)
+            eqs_rho[1, jj, :] += 0.5j*(Om2i*rho32ijc-Om2ic*rho32ij)
+            eqs_rho[1, jj, :] += -gamma21*rho22ij + gamma32*rho33ij
 
-        # if flag:
-        #     ii = Nv/4
-        #     print 111, ii, vZ[ii], -1j*vZ[ii]*omega_laser1/c, eq1j[ii]
+            # Equation 3 (d rho33ij / dt)
+            eqs_rho[2, jj, :] += -0.5j*(Om2i*rho32ijc-Om2ic*rho32ij)
+            eqs_rho[2, jj, :] += -gamma32*rho33ij
 
-        # We calculate the right-hand side of equation 3 taking rho21 as
-        # the average of all velocity groups weighted by the p_i's. In other
-        # words we use here the density matrix of the complete velocity
-        # ensemble.
+            # Equation 4 (d rho21ij / dt)
+            fact = (1j*delta1 - gamma21/2 - 1j*vZ[jj]*omega_laser1/c)
+            eqs_rho[3, jj, :] += -0.5j*Om1i*rho11ij
+            eqs_rho[3, jj, :] += 0.5j*Om1i*rho22ij
+            eqs_rho[3, jj, :] += -0.5j*Om2ic*rho31ij
+            eqs_rho[3, jj, :] += fact*rho21ij
+
+            # Equation 5 (d rho31ij / dt)
+            fact = 1j*(delta1+delta2+vZ[jj]*(omega_laser2-omega_laser1)/c)
+            fact += -gamma32/2
+            eqs_rho[4, jj, :] += 0.5j*Om1i*rho32ij
+            eqs_rho[4, jj, :] += -0.5j*Om2i*rho21ij
+            eqs_rho[4, jj, :] += fact*rho31ij
+
+            # Equation 6 (d rho32ij / dt)
+            fact = 1j*(delta2+vZ[jj]*omega_laser2/c) - (gamma21+gamma32)/2
+            eqs_rho[5, jj, :] += -0.5j*Om2i*rho22ij
+            eqs_rho[5, jj, :] += 0.5j*Om2i*rho33ij
+            eqs_rho[5, jj, :] += 0.5j*Om1ic*rho31ij
+            eqs_rho[5, jj, :] += fact*rho32ij
+
         rho21i_tot = sum([p[jj]*rho21i[jj] for jj in range(Nv)])
-        # if flag:
-        #     print 222, ti, eq1j[-1], eq2j[-1]
-        #     print rho21i[0, 10], rho21i[-1, 10]
-        # print rho21i_tot-rho21i[Nv/2]
-        # print rho21i_tot
-        # if flag:
-        #     try:
-        #         eq3 = -1j*g1*n_atomic*rho21i_tot
-        #     except RuntimeWarning:
-        #         print 112
-        #         print g1
-        #         print n_atomic
-        #         print rho21i_tot
-        #         print ti, iii
-        eq3 = -1j*g1*n_atomic*rho21i_tot
-        eq3 += - cDz(Om1i, c, cheb_diff_mat)
+        rho32i_tot = sum([p[jj]*rho32i[jj] for jj in range(Nv)])
 
-        # try:
-        #
-        # except RuntimeWarning:
-        #     print 222, ti, iii, flag
-        #     print rho21i_tot
-        # if flag:
-        #     print 222, ti, iii, flag
-        #     print rho21i_tot
+        # Equation 7 (d rho32ij / dt)
+        eqs_Om[0] += -1j*g1*n_atomic*rho21i_tot
+        eqs_Om[0] += - cDz(Om1i, c, cheb_diff_mat)
 
-        return np.array([eq1, eq2]), eq3
+        # Equation 8 (d rho32ij / dt)
+        eqs_Om[1] += -1j*g2*n_atomic*rho32i_tot
+        eqs_Om[1] += + cDz(Om2i, c, cheb_diff_mat)
+
+        return eqs_rho, eqs_Om
 
     ii = 0
     # We carry out the Runge-Kutta method.
     ti = 0.0
     rhoii = rho[0]
-    Om1ii = Om1[0]
+    Omii = Om[0]
     for ii in range(Nt-1):
 
-        rhok1, Om1k1 = f(rhoii, Om1ii, ti, params, flag=1)
+        # print ii, np.amax(const2*Omii[1]*Omii[1].conjugate())
 
-        rhok2, Om1k2 = f(rhoii+rhok1*dt/2.0, Om1ii+Om1k1*dt/2.0,
-                         ti+dt/2.0, params, flag=2)
+        rhok1, Omk1 = f(rhoii, Omii, ti, params, flag=ii)
 
-        rhok3, Om1k3 = f(rhoii+rhok2*dt/2.0, Om1ii+Om1k2*dt/2.0,
-                         ti+dt/2.0, params, flag=3)
+        rhok2, Omk2 = f(rhoii+rhok1*dt/2.0, Omii+Omk1*dt/2.0,
+                        ti+dt/2.0, params, flag=2)
 
-        rhok4, Om1k4 = f(rhoii+rhok3*dt, Om1ii+Om1k3*dt,
-                         ti+dt, params, flag=4)
+        rhok3, Omk3 = f(rhoii+rhok2*dt/2.0, Omii+Omk2*dt/2.0,
+                        ti+dt/2.0, params, flag=3)
+
+        rhok4, Omk4 = f(rhoii+rhok3*dt, Omii+Omk3*dt,
+                        ti+dt, params, flag=4)
         # The solution at time ti + dt:
         ti = ti + dt
         rhoii = rhoii + (rhok1+2*rhok2+2*rhok3+rhok4)*dt/6.0
-        Om1ii = Om1ii + (Om1k1+2*Om1k2+2*Om1k3+Om1k4)*dt/6.0
+        Omii = Omii + (Omk1+2*Omk2+2*Omk3+Omk4)*dt/6.0
+
+        # We impose the boundary condition.
+        Omii[0][0] = Omega1_boundary[ii+1]
+        Omii[1][-1] = Omega2_boundary[ii+1]
 
         # We determine the index for the sampling.
         if keep_data == "all":
@@ -366,11 +385,8 @@ def solve(params, plots=False, name=""):
             if ii % sampling_rate == 0:
                 sampling_index = ii/sampling_rate
 
-        # We impose the boundary condition.
-        Om1ii[0] = Omega1_boundary[ii+1]
-
         rho[sampling_index] = rhoii
-        Om1[sampling_index] = Om1ii
+        Om[sampling_index] = Omii
 
         # Om1 = np.zeros((Nt, Nz), complex)
         # rho = np.zeros((Nt, Nrho, Nv, Nz), complex)
@@ -383,21 +399,38 @@ def solve(params, plots=False, name=""):
 
     # We plot the solution.
     if plots:
-        const1 = np.pi*c*epsilon_0*hbar*(w1/e_charge/r1)**2/16.0/omega_laser1
         # We calculate the complete density matrix:
         rho_tot = sum([p[jj]*rho[:, :, jj, :] for jj in range(Nv)])
-        rho21 = rho_tot[:, 0, :]
-        rho31 = rho_tot[:, 1, :]
+        rho11 = rho_tot[:, 0, :]
+        rho22 = rho_tot[:, 1, :]
+        rho33 = rho_tot[:, 2, :]
+        rho21 = rho_tot[:, 3, :]
+        rho31 = rho_tot[:, 4, :]
+        rho32 = rho_tot[:, 5, :]
 
-        simple_complex_plot(Z*100, t_sample*1e9, np.sqrt(const1*1e-9)*Om1,
+        simple_complex_plot(Z*100, t_sample*1e9,
+                            np.sqrt(const1*1e-9)*Om[:, 0, :],
                             "sol_Om1_"+name+".png", amount=r"\Omega_s",
                             modsquare=True)
+        simple_complex_plot(Z*100, t_sample*1e9,
+                            np.sqrt(const2*1e-9)*Om[:, 1, :],
+                            "sol_Om2_"+name+".png", amount=r"\Omega_c",
+                            modsquare=True)
+
+        simple_complex_plot(Z*100, t_sample*1e9, rho11,
+                            "sol_rho11_"+name+".png", amount=r"\rho_{11}")
+        simple_complex_plot(Z*100, t_sample*1e9, rho22,
+                            "sol_rho22_"+name+".png", amount=r"\rho_{22}")
+        simple_complex_plot(Z*100, t_sample*1e9, rho33,
+                            "sol_rho33_"+name+".png", amount=r"\rho_{33}")
         simple_complex_plot(Z*100, t_sample*1e9, rho21,
                             "sol_rho21_"+name+".png", amount=r"\rho_{21}")
         simple_complex_plot(Z*100, t_sample*1e9, rho31,
                             "sol_rho31_"+name+".png", amount=r"\rho_{31}")
+        simple_complex_plot(Z*100, t_sample*1e9, rho32,
+                            "sol_rho32_"+name+".png", amount=r"\rho_{32}")
 
-    return t_sample, Z, vZ, rho, Om1
+    return t_sample, Z, vZ, rho, Om
 
 
 def efficiencies_r1r2t0w(energy_pulse2, p, explicit_decoherence=None, name=""):
@@ -408,25 +441,24 @@ def efficiencies_r1r2t0w(energy_pulse2, p, explicit_decoherence=None, name=""):
     # A name to use in the plots.
     name = "energy"+name
     # We get the default values.
-    r1 = no_fit_params["r1"]
-    r2 = no_fit_params["r2"]
-    t0s = no_fit_params["t0s"]
-    t0w = no_fit_params["t0w"]
+    r1 = default_params["r1"]
+    r2 = default_params["r2"]
+    t0s = default_params["t0s"]
+    t0w = default_params["t0w"]
     # print r1/a0, r2/a0, t0w-t0s
 
     # The modified parameters.
     r1 = r1*r1_error
     r2 = r2*r2_error
     t0w = t0s+t0w_error*1e-9
+    # print r1/a0, r2/a0, t0w-t0s
 
     params = set_parameters_ladder({"t0w": t0w, "r1": r1, "r2": r2,
                                     "energy_pulse2": energy_pulse2,
-                                    "verbose": 0, "Nv": 1,
-                                    "t_cutoff": 3.5e-9})
+                                    "verbose": 0})
 
     t, Z, vZ, rho, Om1 = solve(params, plots=False, name=name)
     del rho
-    # print "t_cutoff", params["t_cutoff"]
     eff_in, eff_out, eff = efficiencies(t, Om1, params, plots=True, name=name)
 
     # We explicitly introduce the measured decoherence.
@@ -445,8 +477,8 @@ def efficiencies_t0wenergies(p, explicit_decoherence=None, name=""):
     # A name to use in the plots.
     name = "energy"+str(name)
     # We get the default values.
-    r1 = default_params["r1"]
-    r2 = default_params["r2"]
+    r1 = default_params["r1"]*0.23765377
+    r2 = default_params["r2"]*0.78910769
     t0s = default_params["t0s"]
     t0w = default_params["t0w"]
     t0r = default_params["t0r"]
@@ -456,13 +488,12 @@ def efficiencies_t0wenergies(p, explicit_decoherence=None, name=""):
     alpha_rw = np.sqrt(energy_read/energy_write)
 
     t0w = t0s+tmeet_error*1e-9
-    t0r = t0w + 1.0*3.5e-9
+    t0r = t0w + 3.5e-9
     params = set_parameters_ladder({"t0w": t0w, "t0r": t0r,
                                     "r1": r1, "r2": r2,
                                     "energy_pulse2": energy_write,
                                     "alpha_rw": alpha_rw,
                                     "t_cutoff": 3.5e-9,
-                                    "Nv": 1,
                                     "verbose": 0})
 
     t, Z, vZ, rho, Om1 = solve(params, plots=False, name=name)
@@ -477,5 +508,4 @@ def efficiencies_t0wenergies(p, explicit_decoherence=None, name=""):
     return eff_in, eff_out, eff
 
 
-no_fit_params = set_parameters_ladder(fitted_couplings=False)
 default_params = set_parameters_ladder()
