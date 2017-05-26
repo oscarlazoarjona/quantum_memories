@@ -11,8 +11,8 @@ from scipy.optimize import curve_fit
 from multiprocessing import Pool, cpu_count
 from time import time
 
+from quantum_memories import orca
 from quantum_memories.misc import set_parameters_ladder, efficiencies
-from quantum_memories.orca import solve
 
 
 def model_theoretical(t, amp, sigma):
@@ -34,7 +34,7 @@ def efficiencies_delay(i, Nv, explicit_decoherence=None):
     # print str(i)+"th readout, t0r - t0w =", (t0r - t0w)*1e9, "ns"
 
     # We call the solver from orca_solver.py
-    t, Z, vZ, rho1, Om1 = solve(params, plots=False, name=name)
+    t, Z, vZ, rho1, Om1 = orca.solve(params, plots=False, name=name)
     # We calculate the efficiencies.
     eff_in, eff_out, eff = efficiencies(t, Om1, params,
                                         plots=True, name=name)
