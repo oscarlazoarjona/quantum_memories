@@ -83,7 +83,7 @@ def chi2(xx):
 
 
 # We set the default parameters, taken from settings.py.
-default_params = set_parameters_ladder()
+default_params = set_parameters_ladder(fitted_couplings=False)
 if __name__ == '__main__':
 
     Nprocs = cpu_count()
@@ -142,11 +142,13 @@ if __name__ == '__main__':
     x14 = [0.23543177, 0.81360687, -0.420853]  # A nice one! 0.0201248140575
 
     if optimize:
+        print "Optimizing..."
         result = minimize(chi2, x14, method="Nelder-Mead",
                           options={"maxfev": 100})
         print result
         x14 = result.x
     else:
+        print "Calculating error for the fitted parameters..."
         err = chi2(x14)
         print "The error is", err
 
@@ -162,6 +164,8 @@ if __name__ == '__main__':
 
     #########################################################################
     # We create a continuous plot.
+    print
+    print "Calculating a continuous plot..."
     energies_cont = np.linspace(0.0, 550e-12, 150)
     eff_in = np.zeros(len(energies_cont))
     eff_out = np.zeros(len(energies_cont))
@@ -210,6 +214,8 @@ if __name__ == '__main__':
     ###########################################################################
     # We use the fitted values to the efficiencies at
     # different meeting points
+    print
+    print "Calculating the efficiencies for the single-photon experiment..."
     ewrite = 210e-12  # Joules
     eread = 970e-12  # Joules
 
@@ -301,7 +307,7 @@ if __name__ == '__main__':
     ##############################################
 
     print
-    print "For the coherent pulses experiment:"
+    print "For the single-photon experiment:"
     print "The fitted values are:"
     print "r1:", x14[0]*default_params["r1"]/a0, "Bohr radii"
     print "r2:", x14[1]*default_params["r2"]/a0, "Bohr radii"
