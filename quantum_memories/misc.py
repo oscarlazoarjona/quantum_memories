@@ -97,7 +97,7 @@ def cDz(fz, c, cheb_diff_mat):
     return c*np.dot(fz, cheb_diff_mat)
 
 
-def set_parameters_ladder(custom_parameters=None):
+def set_parameters_ladder(custom_parameters=None, fitted_couplings=True):
     r"""Set the parameters.
 
     Only completely independent parameters are taken from settings.py.
@@ -139,6 +139,10 @@ def set_parameters_ladder(custom_parameters=None):
 
     if pms["Nt"] % pms["sampling_rate"] != 0:
         raise ValueError("Nt must be a multiple of the sampling_rate.")
+
+    if fitted_couplings:
+        pms.update({"r1": pms["r1"]*0.23543177})
+        pms.update({"r2": pms["r2"]*0.81360687})
 
     return pms
 

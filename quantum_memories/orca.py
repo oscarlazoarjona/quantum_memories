@@ -406,10 +406,10 @@ def efficiencies_r1r2t0w(energy_pulse2, p, explicit_decoherence=None, name=""):
     # A name to use in the plots.
     name = "energy"+name
     # We get the default values.
-    r1 = default_params["r1"]
-    r2 = default_params["r2"]
-    t0s = default_params["t0s"]
-    t0w = default_params["t0w"]
+    r1 = no_fit_params["r1"]
+    r2 = no_fit_params["r2"]
+    t0s = no_fit_params["t0s"]
+    t0w = no_fit_params["t0w"]
     # print r1/a0, r2/a0, t0w-t0s
 
     # The modified parameters.
@@ -444,8 +444,8 @@ def efficiencies_t0wenergies(p, explicit_decoherence=None, name=""):
     # A name to use in the plots.
     name = "energy"+str(name)
     # We get the default values.
-    r1 = default_params["r1"]*0.23543177
-    r2 = default_params["r2"]*0.81360687
+    r1 = default_params["r1"]
+    r2 = default_params["r2"]
     t0s = default_params["t0s"]
     t0w = default_params["t0w"]
     t0r = default_params["t0r"]
@@ -476,4 +476,5 @@ def efficiencies_t0wenergies(p, explicit_decoherence=None, name=""):
     return eff_in, eff_out, eff
 
 
+no_fit_params = set_parameters_ladder(fitted_couplings=False)
 default_params = set_parameters_ladder()

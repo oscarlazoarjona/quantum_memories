@@ -107,7 +107,7 @@ t0r = t0w + 3.5e-9
 alpha_rw = 1.0
 
 t_cutoff = t0r+D/2/c+tau1
-t_cutoff = 4.5e-9
+t_cutoff = 3.0e-9
 
 ######################
 # The detuning of the signal field (in Hz):

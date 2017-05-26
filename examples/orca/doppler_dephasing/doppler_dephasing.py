@@ -26,7 +26,8 @@ def efficiencies_delay(i, Nv, explicit_decoherence=None):
     # We set custom parameters (different from those in settings.py)
     t0w = default_params["t0w"]
     params = set_parameters_ladder({"Nv": Nv, "Nt": 51000, "T": 16e-9,
-                                    "t0r": t0w+3.5e-9+i*1e-9, "verbose": 0})
+                                    "t0r": t0w+3.5e-9+i*1e-9,
+                                    "verbose": 0})
     t0w = params["t0w"]
     # t0r = params["t0r"]
     # print "......................................."
@@ -163,8 +164,8 @@ if __name__ == '__main__':
         amp_the, sig_the = curve_fit(model_theoretical, tdelay, eff_list,
                                      p0=[1.0, 5.4e-9])[0]
 
-        sigma[jj] = sig_the
-        print "Nv, 1/e time, calculation time:", Nvi, sig_the*1e9, "ns",
+        sigma[jj] = abs(sig_the)
+        print "Nv, 1/e time, calculation time:", Nvi, abs(sig_the)*1e9, "ns",
         print (time() - t0)/60.0, "min"
 
         # We make a plot of the fitted gaussian.
