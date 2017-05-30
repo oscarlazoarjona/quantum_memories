@@ -171,7 +171,7 @@ if __name__ == '__main__':
           5.00000179e-01, 1.26338969e+00]
     t_cutoff = 2.4e-9
 
-    # This set of parameters has ORCA parameters which should be feasible.
+    # This set of parameters is both ORCA and feasible.
     # read-in efficiency: 0.8225
     # total efficiency:   0.5105
     x0 = [0.05373289, 2.26084362, 1.95388604, 38.19563015,
