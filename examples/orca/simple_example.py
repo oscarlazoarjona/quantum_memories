@@ -13,7 +13,7 @@ from quantum_memories import orca
 from quantum_memories.misc import set_parameters_ladder, efficiencies
 
 
-default_params = set_parameters_ladder()
+default_params = set_parameters_ladder({"Temperature": 273.15+25})
 if __name__ == '__main__':
     name = "test"
     t0 = time()
