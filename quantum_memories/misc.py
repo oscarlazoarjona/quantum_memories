@@ -98,7 +98,7 @@ def cDz(fz, c, cheb_diff_mat):
 
 
 def set_parameters_ladder(custom_parameters=None, fitted_couplings=True):
-    r"""Set the parameters.
+    r"""Set the parameters for a ladder memory.
 
     Only completely independent parameters are taken from settings.py.
     The rest are derived from them.
@@ -145,6 +145,54 @@ def set_parameters_ladder(custom_parameters=None, fitted_couplings=True):
     if fitted_couplings and cond1 and cond2:
         pms.update({"r1": pms["r1"]*0.23543177})
         pms.update({"r2": pms["r2"]*0.81360687})
+
+    return pms
+
+
+def set_parameters_lambda(custom_parameters=None, fitted_couplings=True):
+    r"""Set the parameters for a lambda memory.
+
+    Only completely independent parameters are taken from settings.py.
+    The rest are derived from them.
+    """
+    if custom_parameters is None:
+        custom_parameters = {}
+    pm_names = ["magic", "red_detuned",
+                "e_charge", "hbar", "c", "epsilon_0", "kB",
+                "Omega", "distance_unit", "element", "isotope",
+                "Nt", "Nz", "Nv", "Nrho", "T", "L", "sampling_rate",
+                "keep_data", "mass", "Temperature", "Nsigma",
+                "gamma31", "gamma32", "omega31", "omega31", "omega31",
+                "r31", "r32",
+                "delta1", "sigma_power1", "sigma_power2",
+                "w1", "w2", "energy_pulse31", "energy_pulse32",
+                "t0s", "t0w", "t0r", "alpha_rw", "t_cutoff", "verbose"]
+    pms = {}
+
+    for i in custom_parameters:
+        if i not in pm_names:
+            raise ValueError(str(i)+" is not a valid parameter name.")
+
+    for name in pm_names:
+        if name in custom_parameters:
+            pms.update({name: custom_parameters[name]})
+        else:
+            s = "from settings_lambda import "+name
+            exec(s)
+            s = "pms.update({'"+name+"':"+name+"})"
+            exec(s)
+
+    delta1 = pms["delta1"]
+    delta2 = -delta1
+    omega_laser1 = delta1 + omega21
+    omega_laser2 = delta2 + omega32
+    pms.update({"omega_laser1": omega_laser1, "omega_laser2": omega_laser2})
+    # We make a few checks
+    if pms["Nv"] == 2:
+        raise ValueError("Nv = 2 is a very bad choice.")
+
+    if pms["Nt"] % pms["sampling_rate"] != 0:
+        raise ValueError("Nt must be a multiple of the sampling_rate.")
 
     return pms
 
