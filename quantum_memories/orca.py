@@ -425,7 +425,7 @@ def solve(params, plots=False, name="", integrate_velocities=False):
     if integrate_velocities:
         rho_tot = sum(p[jj] * rho[:, :, jj, :] for jj in range(Nv))
         rho31 = rho_tot[:, 1, :]
-        return t_sample, Z, Om1, rho31
+        return t_sample, Z, rho31, Om1
     else:
         return t_sample, Z, vZ, rho, Om1
 
