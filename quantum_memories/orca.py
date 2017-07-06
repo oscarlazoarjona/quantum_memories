@@ -24,6 +24,7 @@ from matplotlib import rcParams
 
 from misc import cheb, cDz, simple_complex_plot, set_parameters_ladder
 from misc import efficiencies, vapour_number_density
+from misc import Omega2_HG, Omega1_initial_HG, Omega1_boundary_HG
 from scipy.constants import physical_constants
 
 a0 = physical_constants["Bohr radius"][0]
@@ -32,7 +33,7 @@ rcParams['mathtext.fontset'] = 'cm'
 rcParams['mathtext.rm'] = 'serif'
 
 
-def solve(params, plots=False, name=""):
+def solve(params, plots=False, name="", integrate_velocities=False):
     r"""Solve the equations for the given parameters."""
     def heaviside(x):
         return np.where(x <= 0, 0.0, 1.0) + np.where(x == 0, 0.5, 0.0)
@@ -80,6 +81,15 @@ def solve(params, plots=False, name=""):
         t0r = params["t0r"]
         alpha_rw = params["alpha_rw"]
         verbose = params["verbose"]
+
+        #
+        # Additions BB for Green's function calculations
+        #
+        ns = params["ns"]
+        nw = params["nw"]
+        nr = params["nr"]
+        USE_HG_CTRL = params["USE_HG_CTRL"]
+        USE_HG_SIG = params["USE_HG_SIG"]
 
     ##################################################
     # We calculate the atomic density (ignoring the atoms in the lower
@@ -210,8 +220,13 @@ def solve(params, plots=False, name=""):
         plt.close("all")
 
         const2 = np.pi*c*epsilon_0*hbar*(w2/e_charge/r2)**2/16.0/omega_laser2
-        Om2_mesh = [Omega2(ti, Z, Omega2_peak, tau2, t0w, t0r, alpha_rw)
-                    for ti in t_sample]
+        if not USE_HG_CTRL:
+            Om2_mesh = [Omega2(ti, Z, Omega2_peak, tau2, t0w, t0r, alpha_rw)
+                        for ti in t_sample]
+        else:
+            Om2_mesh = [Omega2_HG(Z, ti, sigma_power2, sigma_power2,
+                                  Omega2_peak, t0w, t0r,
+                                  alpha_rw, nw=nw, nr=nr) for ti in t_sample]
         Om2_mesh = np.array(Om2_mesh)
         Om2_mesh = const2*Om2_mesh**2
 
@@ -231,12 +246,17 @@ def solve(params, plots=False, name=""):
 
     ##################################################
     # We establish the boundary and initial conditions.
-    Omega1_boundary = Omega1_peak*np.exp(-4*np.log(2.0) *
-                                         (t - t0s + D/2/c)**2/tau1**2)
+    if not USE_HG_SIG:
+        Omega1_boundary = Omega1_peak*np.exp(-4*np.log(2.0) *
+                                             (t - t0s + D/2/c)**2/tau1**2)
     # The signal pulse at t = 0 is
-    Omega1_initial = Omega1_peak*np.exp(-4*np.log(2.0)*(-t0s-Z/c)**2/tau1**2)
-    # print t0s, D, c, tau1, t[0], t[-1]
-    # print len(Omega1_initial)
+        Omega1_initial = Omega1_peak*np.exp(-4*np.log(2.0) *
+                                            (-t0s-Z/c)**2/tau1**2)
+    else:
+        Omega1_boundary = Omega1_boundary_HG(t, sigma_power1, Omega1_peak,
+                                             t0s, D, ns=ns)
+        Omega1_initial = Omega1_initial_HG(Z, sigma_power1, Omega1_peak,
+                                           t0s, ns=ns)
 
     Om1[0] = Omega1_initial
 
@@ -276,7 +296,12 @@ def solve(params, plots=False, name=""):
         Nv = len(rho21i)
 
         # We calculate the control field at time ti.
-        Om2i = Omega2(ti, Z, Omega2_peak, tau2, t0w, t0r, alpha_rw)
+        if not USE_HG_CTRL:
+            Om2i = Omega2(ti, Z, Omega2_peak, tau2, t0w, t0r, alpha_rw)
+        else:
+            Om2i = Omega2_HG(Z, ti, sigma_power2, sigma_power2,
+                             Omega2_peak, t0w, t0r, alpha_rw,
+                             nw=nw, nr=nr)
 
         # We calculate the right-hand sides of equations 1 and 2 for all
         # velocity groups.
@@ -397,7 +422,12 @@ def solve(params, plots=False, name=""):
         simple_complex_plot(Z*100, t_sample*1e9, rho31,
                             "sol_rho31_"+name+".png", amount=r"\rho_{31}")
 
-    return t_sample, Z, vZ, rho, Om1
+    if integrate_velocities:
+        rho_tot = sum(p[jj] * rho[:, :, jj, :] for jj in range(Nv))
+        rho31 = rho_tot[:, 1, :]
+        return t_sample, Z, Om1, rho31
+    else:
+        return t_sample, Z, vZ, rho, Om1
 
 
 def efficiencies_r1r2t0w(energy_pulse2, p, explicit_decoherence=None, name=""):
