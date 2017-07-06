@@ -31,15 +31,22 @@ if __name__ == '__main__':
     name = "test"
     # t0 = time()
     print ("Mode order 0")
-    print default_params["Nv"]
 
     t_sample, Z, Om1, rho31 = orca.solve(default_params, plots=False,
                                          name=name, integrate_velocities=True)
+    Nt = len(t_sample); Nz = len(Z)
+    t_cutoff = default_params["t_cutoff"]
 
-    N = len(t_sample)
-    M = len(Z)
-    Gri = np.zeros((M, N), complex)
-    Gri += rho31[-1, :].reshape((M, 1)).dot(Om1[:, 0].reshape((1, N)))
+    Om1_in = Om1[:, 0]
+    t_out = np.array([t_sample[i] for i in range(Nt)
+                      if t_sample[i] > t_cutoff])
+    Om1_tra = np.array([Om1[i, -1] for i in range(Nt)
+                        if t_sample[i] < t_cutoff])
+    Om1_out = np.array([Om1[i, -1] for i in range(Nt)
+                        if t_sample[i] > t_cutoff])
+    Nout = len(Om1_out)
+    Gri = np.zeros((Nout, Nt), complex)
+    Gri += Om1_out.reshape((Nout, 1)).dot(Om1_in.reshape((1, Nt)))
 
     for ii in range(4):
         print ("Mode order %i" % (ii + 1))
@@ -47,31 +54,43 @@ if __name__ == '__main__':
         aux = orca.solve(default_params, plots=False,
                          name=name, integrate_velocities=True)
         t_sample, Z, Om1, rho31 = aux
-        Gri += rho31[-1, :].reshape((M, 1)).dot(Om1[:, 0].reshape((1, N)))
+
+        Om1_in = Om1[:, 0]
+        Om1_tra = np.array([Om1[i, -1] for i in range(Nt)
+                            if t_sample[i] < t_cutoff])
+        Om1_out = np.array([Om1[i, -1] for i in range(Nt)
+                            if t_sample[i] > t_cutoff])
+
+        Gri += Om1_out.reshape((Nout, 1)).dot(Om1_in.reshape((1, Nt)))
 
     Gri /= np.sqrt((abs(Gri)**2).sum())
     U, D, V = svd(Gri)
     K = 1.0 / (D**4).sum()
     print ("Effective mode number: %.3f" % K)
-    T, S = np.meshgrid(t_sample, Z)
+    T, S = np.meshgrid(t_sample, t_out)
     plt.figure()
     plt.contourf(T, S, abs(Gri)**2, 256)
     plt.tight_layout()
+    plt.savefig("Greens.png", bbox_inches="tight")
     # plt.show()
     # sys.exit()
 
     plt.figure()
     plt.subplot(211)
-    plt.plot(Z, np.abs(U[:, 0]))
-    plt.plot(Z, np.abs(U[:, 1]))
-    plt.plot(Z, np.abs(U[:, 2]))
-    plt.plot(Z, np.abs(U[:, 3]))
+    plt.plot(t_out, np.abs(U[:, 0])**2, label="Optimal output")
+    # plt.plot(t_out, np.abs(U[:, 0])**2, label="Optimal output")
+    # plt.plot(t_out, np.abs(U[:, 1])**2)
+    # plt.plot(t_out, np.abs(U[:, 2])**2)
+    # plt.plot(t_out, np.abs(U[:, 3])**2)
+    plt.legend()
     plt.subplot(212)
-    plt.plot(t_sample, np.abs(V[0, :]))
-    plt.plot(t_sample, np.abs(V[1, :]))
-    plt.plot(t_sample, np.abs(V[2, :]))
-    plt.plot(t_sample, np.abs(V[3, :]))
+    plt.plot(t_sample, np.abs(V[0, :])**2, label="Optimal input")
+    # plt.plot(t_sample, np.abs(V[1, :])**2)
+    # plt.plot(t_sample, np.abs(V[2, :])**2)
+    # plt.plot(t_sample, np.abs(V[3, :])**2)
+    plt.legend()
     plt.tight_layout()
+    plt.savefig("singular_modes.png", bbox_inches="tight")
     # plt.show()
 
     plt.figure()
@@ -80,6 +99,7 @@ if __name__ == '__main__':
     plt.subplot(122)
     plt.bar(np.arange(5), (D[:5])**2)
     plt.tight_layout()
+    plt.savefig("singular_values.png", bbox_inches="tight")
     # plt.show()
     # tsolve = time()-t0
     # t0 = time()
