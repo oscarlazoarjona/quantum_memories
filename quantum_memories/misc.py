@@ -84,11 +84,11 @@ def Omega1_boundary_HG(t, sigma1, Omega1, t0s, D, ns=0, c=299792458):
 
 
     Arguments:
-    t -- time axis (numpy.ndarray)
-    sigma1 -- spectral intensity FWHM of the signal pulse
-    Omega1 -- peak Rabi frequency of the signal pulse
-    t0s -- temporal offset of the signal pulse
-    D -- spatial extent of the calculation
+    t -- time axis (numpy.ndarray).
+    sigma1 -- spectral intensity FWHM of the signal pulse.
+    Omega1 -- peak Rabi frequency of the signal pulse.
+    t0s -- temporal offset of the signal pulse.
+    D -- spatial extent of the calculation.
 
 
     Keyword Arguments:

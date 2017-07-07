@@ -26,6 +26,7 @@ from misc import cheb, cDz, simple_complex_plot, set_parameters_ladder
 from misc import efficiencies, vapour_number_density
 from misc import Omega2_HG, Omega1_initial_HG, Omega1_boundary_HG
 from scipy.constants import physical_constants
+from scipy.linalg import svd
 
 a0 = physical_constants["Bohr radius"][0]
 # We set matplotlib to use a nice latex font.
@@ -33,7 +34,8 @@ rcParams['mathtext.fontset'] = 'cm'
 rcParams['mathtext.rm'] = 'serif'
 
 
-def solve(params, plots=False, name="", integrate_velocities=False):
+def solve(params, plots=False, name="", integrate_velocities=False,
+          input_signal=None):
     r"""Solve the equations for the given parameters."""
     def heaviside(x):
         return np.where(x <= 0, 0.0, 1.0) + np.where(x == 0, 0.5, 0.0)
@@ -91,6 +93,12 @@ def solve(params, plots=False, name="", integrate_velocities=False):
         USE_HG_CTRL = params["USE_HG_CTRL"]
         USE_HG_SIG = params["USE_HG_SIG"]
 
+    if input_signal is not None:
+        USE_INPUT_SIGNAL = True
+        USE_HG_SIG = False
+    else:
+        USE_INPUT_SIGNAL = False
+        USE_HG_SIG = params["USE_HG_SIG"]
     ##################################################
     # We calculate the atomic density (ignoring the atoms in the lower
     #  hyperfine state)
@@ -246,17 +254,47 @@ def solve(params, plots=False, name="", integrate_velocities=False):
 
     ##################################################
     # We establish the boundary and initial conditions.
-    if not USE_HG_SIG:
+    Omega1_peak = 4*2**(0.75)*np.sqrt(energy_pulse1)*e_charge*r1 *\
+        (np.log(2.0))**(0.25)/(np.pi**(0.75)*hbar*w1*np.sqrt(c*epsilon_0*tau1))
+
+    if USE_HG_SIG:
+        Omega1_peak_norm = (2**3*np.log(2.0)/np.pi)**(0.25)/np.sqrt(tau1)
+        Omega1_boundary = Omega1_boundary_HG(t, sigma_power1, Omega1_peak_norm,
+                                             t0s, D, ns=ns)
+        Omega1_initial = Omega1_initial_HG(Z, sigma_power1, Omega1_peak_norm,
+                                           t0s, ns=ns)
+        dtt = t[1]-t[0]
+        norm = sum([Omega1_boundary[i]*Omega1_boundary[i].conjugate()
+                    for i in range(len(Omega1_boundary))])*dtt
+        Omega1_boundary = Omega1_boundary/np.sqrt(norm)
+        Omega1_initial = Omega1_initial/np.sqrt(norm)
+
+    if USE_INPUT_SIGNAL:
+        # We get the boundary by extending the input signal to
+        # account for the sampling rate.
+        Omega1_boundary = sum([[omi]*sampling_rate
+                               for omi in input_signal], [])
+        Omega1_boundary = np.array(Omega1_boundary)
+
+        Omega1_initial = np.zeros(Nz, complex)
+    if (not USE_HG_SIG) and (not USE_INPUT_SIGNAL):
         Omega1_boundary = Omega1_peak*np.exp(-4*np.log(2.0) *
                                              (t - t0s + D/2/c)**2/tau1**2)
-    # The signal pulse at t = 0 is
+        # The signal pulse at t = 0 is
         Omega1_initial = Omega1_peak*np.exp(-4*np.log(2.0) *
                                             (-t0s-Z/c)**2/tau1**2)
-    else:
-        Omega1_boundary = Omega1_boundary_HG(t, sigma_power1, Omega1_peak,
-                                             t0s, D, ns=ns)
-        Omega1_initial = Omega1_initial_HG(Z, sigma_power1, Omega1_peak,
-                                           t0s, ns=ns)
+
+    # const1 = np.pi*c*epsilon_0*hbar*(w1/e_charge/r1)**2/16.0/omega_laser1
+    # dtt = t[1]-t[0]
+    # Nin = sum([Omega1_boundary[ii]*Omega1_boundary[ii].conjugate()
+    #            for ii in range(Nt)])*dtt*const1
+    #
+    # print Omega1_peak, const1
+    # print omega_laser1, Nt, T, D
+    # print t0s, tau1, w1, energy_pulse1
+    # print e_charge, r1, epsilon_0, hbar, c
+    # print energy_pulse1/hbar/omega_laser1
+    # print Nin, 111
 
     Om1[0] = Omega1_initial
 
@@ -505,6 +543,186 @@ def efficiencies_t0wenergies(p, explicit_decoherence=None, name=""):
         eff = eff_in*eff_out
 
     return eff_in, eff_out, eff
+
+
+def num_integral(t, f):
+    """We integrate using the trapezium rule."""
+    dt = t[1]-t[0]
+    F = sum(f[1:-1])
+    F += (f[1] + f[-1])*0.5
+    return np.real(F*dt)
+
+
+def normalization(t, f, params):
+    """Get the normalization constant for const1*|f|^2 to integrate to one."""
+    const1 = photons_const(params)
+    Nin = num_integral(t, const1*f*f.conjugate())
+    return np.sqrt(np.abs(Nin))
+
+
+def photons_const(params):
+    """Get the constant to translate to photon number."""
+    e_charge = params["e_charge"]
+    hbar = params["hbar"]
+    c = params["c"]
+    epsilon_0 = params["epsilon_0"]
+    r1 = params["r1"]
+    omega_laser1 = params["omega_laser1"]
+    w1 = params["w1"]
+    return np.pi*c*epsilon_0*hbar*(w1/e_charge/r1)**2/16.0/omega_laser1
+
+
+def rescale_input(t, mode, params):
+    r"""Rescale an input mode so that its mod square integral is one photon."""
+    return mode/normalization(t, mode, params)
+
+
+def bra(v):
+    """"Get a bra from an array."""
+    return v.reshape((1, len(v))).conjugate()
+
+
+def ket(v):
+    """"Get a ket from an array."""
+    return v.reshape((len(v), 1))
+
+
+def greens(params, Nhg=5):
+    r"""Calculate the Green's function using params."""
+    # We build the Green's function.
+    t_cutoff = params["t_cutoff"]
+
+    t_sample = np.linspace(0, params["T"],
+                           params["Nt"]/params["sampling_rate"])
+    Nt = len(t_sample); dt = t_sample[1]-t_sample[0]
+    t_out = np.array([t_sample[i] for i in range(Nt)
+                      if t_sample[i] > t_cutoff])
+    Ntout = len(t_out)
+
+    phi = []; psi = []
+    Gri = np.zeros((Ntout, Nt), complex)
+    for ii in range(Nhg):
+        # print ("Mode order %i" % ii)
+        params["ns"] = ii
+        # We solve for the Hermite Gauss mode of order 0.
+        aux = solve(params, integrate_velocities=True)
+        t_sample, Z, rho31, Om1 = aux
+        Nt = len(t_sample); dt = t_sample[1]-t_sample[0]
+
+        # Extract input and output.
+        Om1_in = Om1[:, 0]
+        Om1_out = np.array([Om1[i, -1] for i in range(Nt)
+                            if t_sample[i] > t_cutoff])
+        Ntout = len(Om1_out)
+        Gri += ket(Om1_out).dot(bra(Om1_in))*dt
+        phi += [Om1_in]
+        psi += [Om1_out]
+
+    return Gri, t_sample, t_out
+
+
+def optimize_signal(params, Nhg=5, plots=False, check=False, name="optimal"):
+    """Get the optimal signal modes and total efficiency."""
+    Nhg = 5
+    Gri, t_sample, t_out = greens(params, Nhg)
+    Ntout = len(t_out)
+    const1 = photons_const(params)
+
+    U, D, V = svd(Gri)
+
+    # We check that the Green's function does its job.
+    # print "The optimal efficiency is", D[0]**2
+    # for i in range(Nhg):
+    #     # print ".............."
+    #     Nin = num_integral(t_sample, phi[i]*phi[i].conjugate())
+    #     Nout = num_integral(t_out, psi[i]*psi[i].conjugate())
+    #     psi_cal = Gri.dot(ket(phi[i])).reshape(Ntout)
+    #     Ncal = num_integral(t_out, psi_cal*psi_cal.conjugate())
+    #     # print i, Nin, Nout, Ncal
+
+    # We extract the optimal modes.
+    optimal_input = rescale_input(t_sample, V[0, :], params)
+    ##########################################################################
+    if plots:
+        # Plotting.
+        T, S = np.meshgrid(t_sample*1e9, t_out*1e9)
+        plt.figure()
+        cs = plt.contourf(T, S, abs(Gri)**2, 256)
+        plt.tight_layout()
+        plt.savefig("Greens.png", bbox_inches="tight")
+        plt.colorbar(cs)
+        plt.xlabel(r"$t \ \mathrm{(ns)}$")
+        plt.ylabel(r"$t \ \mathrm{(ns)}$")
+        plt.close("all")
+
+        # We plot the one-photon modes.
+        ii = 0
+        plt.figure()
+        for ii in range(Nhg):
+            if ii == 0:
+                label_out = "Optimal output"
+                label_in = "Optimal input"
+            else:
+                label_out = "output mode "+str(ii)
+                label_in = "intput mode "+str(ii)
+            input_ii = rescale_input(t_sample, V[ii, :], params)
+            output_ii = Gri.dot(ket(input_ii)).reshape(Ntout)
+
+            plt.subplot(212)
+            plt.plot(t_out*1e9, const1*np.abs(output_ii)**2*1e-9,
+                     label=label_out)
+
+            plt.subplot(211)
+            plt.plot(t_sample*1e9, const1*np.abs(input_ii)**2*1e-9,
+                     label=label_in)
+
+        plt.subplot(211)
+        plt.ylabel(r"$\mathrm{photons/ns}$", fontsize=15)
+        plt.legend()
+        # plt.ylim([0, 3])
+        plt.subplot(212)
+        plt.xlabel(r"$t \ (\mathrm{ns})$", fontsize=15)
+        plt.ylabel(r"$\mathrm{photons/ns}$", fontsize=15)
+        plt.legend()
+        plt.tight_layout()
+        plt.savefig("singular_modes.png", bbox_inches="tight")
+        plt.close("all")
+        # plt.show()
+
+        plt.figure()
+        plt.subplot(121)
+        plt.bar(np.arange(5), D[:5])
+        plt.subplot(122)
+        plt.bar(np.arange(5), (D[:5])**2)
+        plt.tight_layout()
+        plt.savefig("singular_values.png", bbox_inches="tight")
+        plt.close("all")
+
+    ##########################################################################
+    # We check that the Green's function actually returns the expected thing.
+    if check:
+        Om1_in_actual = rescale_input(t_sample, optimal_input, params)
+        t_sample, Z, rho31, Om1 = solve(params, plots=False,
+                                        name=name,
+                                        integrate_velocities=True,
+                                        input_signal=Om1_in_actual)
+
+        GOm1_in_actual = Gri.dot(ket(Om1_in_actual)).reshape(Ntout)
+
+        eff_cal = num_integral(t_out, const1 *
+                               GOm1_in_actual*GOm1_in_actual.conjugate())
+
+        eff_in, eff_out, eff = efficiencies(t_sample, Om1, params,
+                                            plots=True, name=name)
+        print "The SVD-calculated efficiency is", D[0]**2
+        print "The Green's function-calculated efficiency is", eff_cal
+        print "The actual efficiency is", eff
+
+    ##########################################################################
+    # The return.
+    optimal_output = Gri.dot(ket(optimal_input)).reshape(Ntout)
+    optimal_efficiency = D[0]**2
+    return optimal_input, optimal_output, optimal_efficiency
 
 
 no_fit_params = set_parameters_ladder(fitted_couplings=False)
