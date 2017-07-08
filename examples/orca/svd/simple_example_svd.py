@@ -10,12 +10,6 @@ default settings.
 # from time import time
 from quantum_memories import orca
 from quantum_memories.misc import set_parameters_ladder
-# from quantum_memories.misc import efficiencies
-
-# import matplotlib.pyplot as plt
-# import numpy as np
-
-# import sys
 
 params = set_parameters_ladder()
 params["alpha_rw"] = 1.0

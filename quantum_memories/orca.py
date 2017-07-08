@@ -88,12 +88,12 @@ def solve(params, plots=False, name="", integrate_velocities=False,
         #
         # Additions BB for Green's function calculations
         #
+
         ns = params["ns"]
         nw = params["nw"]
         nr = params["nr"]
         USE_HG_CTRL = params["USE_HG_CTRL"]
         USE_HG_SIG = params["USE_HG_SIG"]
-
     if input_signal is not None:
         USE_INPUT_SIGNAL = True
         USE_HG_SIG = False
@@ -260,9 +260,10 @@ def solve(params, plots=False, name="", integrate_velocities=False,
 
     if USE_HG_SIG:
         Omega1_peak_norm = (2**3*np.log(2.0)/np.pi)**(0.25)/np.sqrt(tau1)
-        Omega1_boundary = Omega1_boundary_HG(t, sigma_power1, Omega1_peak_norm,
+        Omega1_boundary = Omega1_boundary_HG(t, 1*sigma_power1,
+                                             Omega1_peak_norm,
                                              t0s, D, ns=ns)
-        Omega1_initial = Omega1_initial_HG(Z, sigma_power1, Omega1_peak_norm,
+        Omega1_initial = Omega1_initial_HG(Z, 1*sigma_power1, Omega1_peak_norm,
                                            t0s, ns=ns)
         dtt = t[1]-t[0]
         norm = sum([Omega1_boundary[i]*Omega1_boundary[i].conjugate()
@@ -469,7 +470,8 @@ def solve(params, plots=False, name="", integrate_velocities=False,
         return t_sample, Z, vZ, rho, Om1
 
 
-def efficiencies_r1r2t0w(energy_pulse2, p, explicit_decoherence=None, name=""):
+def efficiencies_r1r2t0w(energy_pulse2, p, explicit_decoherence=None, name="",
+                         return_params=False):
     r"""Get the efficiencies for modified r1, r2, t0w."""
     # We unpack the errors.
     r1_error, r2_error, t0w_error = p
@@ -492,6 +494,8 @@ def efficiencies_r1r2t0w(energy_pulse2, p, explicit_decoherence=None, name=""):
                                     "energy_pulse2": energy_pulse2,
                                     "verbose": 0, "Nv": 1,
                                     "t_cutoff": 3.5e-9})
+    if return_params:
+        return params
 
     t, Z, vZ, rho, Om1 = solve(params, plots=False, name=name)
     del rho
@@ -588,7 +592,7 @@ def ket(v):
     return v.reshape((len(v), 1))
 
 
-def greens(params, Nhg=5):
+def greens(params, index, Nhg=5):
     r"""Calculate the Green's function using params."""
     # We build the Green's function.
     t_cutoff = params["t_cutoff"]
@@ -619,30 +623,73 @@ def greens(params, Nhg=5):
         phi += [Om1_in]
         psi += [Om1_out]
 
+        if ii >= 4:
+            U, D, V = svd(Gri)
+            DD = D/np.sqrt(sum(D**2))
+            K = 1.0/(DD**4).sum()
+            check = ii >= 3*K
+            print "check:", check, ii, 7*K, K, D[: 5]
+            if check:
+                break
+    Nhg = ii
+    # We check that the Green's function does its job.
+    print "Checking Green's function..."
+    plt.close("all")
+
+    plt.figure()
+    for i in range(Nhg):
+        # print ".............."
+        Nin = num_integral(t_sample, phi[i]*phi[i].conjugate())
+        Nout = num_integral(t_out, psi[i]*psi[i].conjugate())
+        psi_cal = Gri.dot(ket(phi[i])).reshape(Ntout)
+        Ncal = num_integral(t_out, psi_cal*psi_cal.conjugate())
+        print i, Nin, Nout, Ncal
+        plt.subplot(211)
+        plt.plot(t_sample, phi[i]*phi[i].conjugate(), label=str(i))
+        plt.subplot(212)
+        plt.plot(t_out, psi[i]*psi[i].conjugate(), label=str(i))
+    plt.subplot(211)
+    plt.legend()
+    plt.subplot(212)
+    plt.legend()
+    plt.savefig("a"+str(index)+".png")
+    plt.close("all")
+
     return Gri, t_sample, t_out
 
 
-def optimize_signal(params, Nhg=5, plots=False, check=False, name="optimal"):
+def optimize_signal(params, index, Nhg=5, plots=False, check=False,
+                    name="optimal"):
     """Get the optimal signal modes and total efficiency."""
-    Nhg = 5
-    Gri, t_sample, t_out = greens(params, Nhg)
+    Nhg = 25
+    Gri, t_sample, t_out = greens(params, index, Nhg)
     Ntout = len(t_out)
     const1 = photons_const(params)
 
     U, D, V = svd(Gri)
 
-    # We check that the Green's function does its job.
-    # print "The optimal efficiency is", D[0]**2
-    # for i in range(Nhg):
-    #     # print ".............."
-    #     Nin = num_integral(t_sample, phi[i]*phi[i].conjugate())
-    #     Nout = num_integral(t_out, psi[i]*psi[i].conjugate())
-    #     psi_cal = Gri.dot(ket(phi[i])).reshape(Ntout)
-    #     Ncal = num_integral(t_out, psi_cal*psi_cal.conjugate())
-    #     # print i, Nin, Nout, Ncal
-
     # We extract the optimal modes.
     optimal_input = rescale_input(t_sample, V[0, :], params)
+    ##########################################################################
+    # We check that the Green's function actually returns the expected thing.
+    if check:
+        Om1_in_actual = rescale_input(t_sample, optimal_input, params)
+        t_sample, Z, rho31, Om1 = solve(params, plots=False,
+                                        name=name,
+                                        integrate_velocities=True,
+                                        input_signal=Om1_in_actual)
+
+        GOm1_in_actual = Gri.dot(ket(Om1_in_actual)).reshape(Ntout)
+
+        eff_cal = num_integral(t_out, const1 *
+                               GOm1_in_actual*GOm1_in_actual.conjugate())
+
+        eff_in, eff_out, eff = efficiencies(t_sample, Om1, params,
+                                            plots=True, name=name)
+        # DD = D/np.sqrt(sum(D**2))
+        print "The SVD-calculated efficiency is", D[0]**2
+        print "The Green's function-calculated efficiency is", eff_cal
+        print "The actual efficiency is", eff
     ##########################################################################
     if plots:
         # Plotting.
@@ -650,7 +697,7 @@ def optimize_signal(params, Nhg=5, plots=False, check=False, name="optimal"):
         plt.figure()
         cs = plt.contourf(T, S, abs(Gri)**2, 256)
         plt.tight_layout()
-        plt.savefig("Greens.png", bbox_inches="tight")
+        plt.savefig("Greens"+str(index)+".png", bbox_inches="tight")
         plt.colorbar(cs)
         plt.xlabel(r"$t \ \mathrm{(ns)}$")
         plt.ylabel(r"$t \ \mathrm{(ns)}$")
@@ -659,7 +706,7 @@ def optimize_signal(params, Nhg=5, plots=False, check=False, name="optimal"):
         # We plot the one-photon modes.
         ii = 0
         plt.figure()
-        for ii in range(Nhg):
+        for ii in range(6):
             if ii == 0:
                 label_out = "Optimal output"
                 label_in = "Optimal input"
@@ -700,30 +747,10 @@ def optimize_signal(params, Nhg=5, plots=False, check=False, name="optimal"):
         plt.close("all")
 
     ##########################################################################
-    # We check that the Green's function actually returns the expected thing.
-    if check:
-        Om1_in_actual = rescale_input(t_sample, optimal_input, params)
-        t_sample, Z, rho31, Om1 = solve(params, plots=False,
-                                        name=name,
-                                        integrate_velocities=True,
-                                        input_signal=Om1_in_actual)
-
-        GOm1_in_actual = Gri.dot(ket(Om1_in_actual)).reshape(Ntout)
-
-        eff_cal = num_integral(t_out, const1 *
-                               GOm1_in_actual*GOm1_in_actual.conjugate())
-
-        eff_in, eff_out, eff = efficiencies(t_sample, Om1, params,
-                                            plots=True, name=name)
-        print "The SVD-calculated efficiency is", D[0]**2
-        print "The Green's function-calculated efficiency is", eff_cal
-        print "The actual efficiency is", eff
-
-    ##########################################################################
     # The return.
     optimal_output = Gri.dot(ket(optimal_input)).reshape(Ntout)
     optimal_efficiency = D[0]**2
-    return optimal_input, optimal_output, optimal_efficiency
+    return optimal_input, optimal_output, optimal_efficiency, eff
 
 
 no_fit_params = set_parameters_ladder(fitted_couplings=False)

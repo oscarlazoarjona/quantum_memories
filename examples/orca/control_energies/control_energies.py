@@ -20,6 +20,7 @@ from time import time
 from quantum_memories.misc import set_parameters_ladder, Measurement
 from quantum_memories.orca import efficiencies_r1r2t0w
 from quantum_memories.orca import efficiencies_t0wenergies
+from quantum_memories.orca import optimize_signal
 from quantum_memories.settings_ladder import optimize
 
 
@@ -34,27 +35,49 @@ def chi2(xx):
     eff = np.zeros(len(energies))
 
     # We create the parallel processes.
-    pool = Pool(processes=Nprocs)
-    # We calculate the efficiencies in parallel.
-    procs = [pool.apply_async(efficiencies_r1r2t0w,
-                              [energies[i], xx, explicit_decoherence, str(i)])
-             for i in range(len(energies))]
+    # pool = Pool(processes=Nprocs)
+    # # We calculate the efficiencies in parallel.
+    # procs = [pool.apply_async(efficiencies_r1r2t0w,
+    #                           [energies[i], xx, explicit_decoherence,
+    #                            str(i)])
+    #          for i in range(len(energies))]
+    #
+    # # We get the results.
+    # aux = [procs[i].get() for i in range(len(energies))]
+    # pool.close()
+    # pool.join()
+    #
+    # # We save the results with more convenient names.
+    # for i in range(len(energies)):
+    #     eff_in[i], eff_out[i], eff[i] = aux[i]
+    #
+    # # We calculate the sum of squared residues.
+    # chi22 = 0.0
+    # chi22 += sum([(eff_meas[i]-eff[i])**2 for i in range(len(energies))])
+    # chi22 += sum([(eff_out_meas[i]-eff_out[i])**2
+    #              for i in range(len(energies))])
+    # chi22 += sum([(eff_in_meas[i]-eff_in[i])**2
+    #               for i in range(len(energies))])
+    #
+    # if optimize:
+    #     print xx, chi22, time() - t0
 
-    # We get the results.
-    aux = [procs[i].get() for i in range(len(energies))]
-    pool.close()
-    pool.join()
-
-    # We save the results with more convenient names.
+    #########################################################################
+    # We calculate the optimized efficiencies.
+    opt_eff = []
+    act_eff = []
+    print "Calculating optimized efficiencies..."
     for i in range(len(energies)):
-        eff_in[i], eff_out[i], eff[i] = aux[i]
 
-    # We calculate the sum of squared residues.
-    chi22 = 0.0
-    chi22 += sum([(eff_meas[i]-eff[i])**2 for i in range(len(energies))])
-    chi22 += sum([(eff_out_meas[i]-eff_out[i])**2
-                 for i in range(len(energies))])
-    chi22 += sum([(eff_in_meas[i]-eff_in[i])**2 for i in range(len(energies))])
+        params = efficiencies_r1r2t0w(energies[i], xx, explicit_decoherence,
+                                      str(i), return_params=True)
+        print
+        print "Data point", i, params["t_cutoff"]
+        params["USE_HG_SIG"] = True
+        aux = optimize_signal(params, i, plots=True, check=True)
+        opt_in, opt_out, opt_eta, act_eta = aux
+        opt_eff += [opt_eta]
+        act_eff += [act_eta]
 
     # We plot the measured efficiencies.
     plt.errorbar(energies*1e12, eff_in_meas, yerr=0.01,
@@ -65,9 +88,12 @@ def chi2(xx):
                  fmt="ko", ms=3, capsize=2, label=r"$\eta_{\mathrm{tot}}$")
 
     # We plot the calculated efficiencies.
-    plt.plot(energies*1e12, eff_in, "r-")
-    plt.plot(energies*1e12, eff_out, "b-")
-    plt.plot(energies*1e12, eff, "k-")
+    # plt.plot(energies*1e12, eff_in, "r-")
+    # plt.plot(energies*1e12, eff_out, "b-")
+    # plt.plot(energies*1e12, eff, "k-")
+    chi22 = 1.0
+    plt.plot(energies*1e12, opt_eff, "g-")
+    plt.plot(energies*1e12, act_eff, "g--")
 
     plt.ylim([-0.02, None])
     plt.xlabel(r"$E_c \ \mathrm{(pJ)}$", fontsize=20)
@@ -77,8 +103,6 @@ def chi2(xx):
     plt.savefig("efficiencies.png", bbox_inches="tight")
     plt.close("all")
 
-    if optimize:
-        print xx, chi22, time() - t0
     return chi22
 
 
@@ -164,153 +188,153 @@ if __name__ == '__main__':
 
     #########################################################################
     # We create a continuous plot.
-    print
-    print "Calculating a continuous plot..."
-    energies_cont = np.linspace(0.0, 550e-12, 150)
-    eff_in = np.zeros(len(energies_cont))
-    eff_out = np.zeros(len(energies_cont))
-    eff = np.zeros(len(energies_cont))
-
-    # We create the parallel processes.
-    pool = Pool(processes=Nprocs)
-    # We calculate the efficiencies in parallel.
-    procs = [pool.apply_async(efficiencies_r1r2t0w,
-                              [energies_cont[i], x14, explicit_decoherence])
-             for i in range(len(energies_cont))]
-
-    # We get the results.
-    aux = [procs[i].get() for i in range(len(energies_cont))]
-    pool.close()
-    pool.join()
-
-    # We save the results with more convenient names.
-    for i in range(len(energies_cont)):
-        eff_in[i], eff_out[i], eff[i] = aux[i]
-
-    # We plot the measured efficiencies.
-    plt.errorbar(energies*1e12, eff_in_meas, yerr=0.01,
-                 fmt="ro", ms=3, capsize=2, label=r"$\eta_{\mathrm{in}}$")
-    plt.errorbar(energies*1e12, eff_out_meas, yerr=error_out,
-                 fmt="bo", ms=3, capsize=2, label=r"$\eta_{\mathrm{out}}$")
-    plt.errorbar(energies*1e12, eff_meas, yerr=0.01,
-                 fmt="ko", ms=3, capsize=2, label=r"$\eta_{\mathrm{tot}}$")
-
-    # We plot the calculated efficiencies.
-    plt.plot(energies_cont*1e12, eff_in, "r-")
-    plt.plot(energies_cont*1e12, eff_out, "b-")
-    plt.plot(energies_cont*1e12, eff, "k-")
-
-    plt.ylim([-0.02, None])
-    plt.xlim([energies_cont[0]*1e12, energies_cont[-1]*1e12])
-
-    plt.xlabel(r"$E_c \ \mathrm{(pJ)}$", fontsize=20)
-    plt.ylabel(r"$\mathrm{Efficiency}$", fontsize=20)
-    plt.legend(fontsize=15, loc=2)
-
-    plt.savefig("control_energies.png", bbox_inches="tight")
-    plt.savefig("control_energies.pdf", bbox_inches="tight")
-    plt.close("all")
+    # print
+    # print "Calculating a continuous plot..."
+    # energies_cont = np.linspace(0.0, 550e-12, 150)
+    # eff_in = np.zeros(len(energies_cont))
+    # eff_out = np.zeros(len(energies_cont))
+    # eff = np.zeros(len(energies_cont))
+    #
+    # # We create the parallel processes.
+    # pool = Pool(processes=Nprocs)
+    # # We calculate the efficiencies in parallel.
+    # procs = [pool.apply_async(efficiencies_r1r2t0w,
+    #                           [energies_cont[i], x14, explicit_decoherence])
+    #          for i in range(len(energies_cont))]
+    #
+    # # We get the results.
+    # aux = [procs[i].get() for i in range(len(energies_cont))]
+    # pool.close()
+    # pool.join()
+    #
+    # # We save the results with more convenient names.
+    # for i in range(len(energies_cont)):
+    #     eff_in[i], eff_out[i], eff[i] = aux[i]
+    #
+    # # We plot the measured efficiencies.
+    # plt.errorbar(energies*1e12, eff_in_meas, yerr=0.01,
+    #              fmt="ro", ms=3, capsize=2, label=r"$\eta_{\mathrm{in}}$")
+    # plt.errorbar(energies*1e12, eff_out_meas, yerr=error_out,
+    #              fmt="bo", ms=3, capsize=2, label=r"$\eta_{\mathrm{out}}$")
+    # plt.errorbar(energies*1e12, eff_meas, yerr=0.01,
+    #              fmt="ko", ms=3, capsize=2, label=r"$\eta_{\mathrm{tot}}$")
+    #
+    # # We plot the calculated efficiencies.
+    # plt.plot(energies_cont*1e12, eff_in, "r-")
+    # plt.plot(energies_cont*1e12, eff_out, "b-")
+    # plt.plot(energies_cont*1e12, eff, "k-")
+    #
+    # plt.ylim([-0.02, None])
+    # plt.xlim([energies_cont[0]*1e12, energies_cont[-1]*1e12])
+    #
+    # plt.xlabel(r"$E_c \ \mathrm{(pJ)}$", fontsize=20)
+    # plt.ylabel(r"$\mathrm{Efficiency}$", fontsize=20)
+    # plt.legend(fontsize=15, loc=2)
+    #
+    # plt.savefig("control_energies.png", bbox_inches="tight")
+    # plt.savefig("control_energies.pdf", bbox_inches="tight")
+    # plt.close("all")
 
     ###########################################################################
-    # We use the fitted values to the efficiencies at
-    # different meeting points
-    print
-    print "Calculating the efficiencies for the single-photon experiment..."
-    ewrite = 210e-12  # Joules
-    eread = 970e-12  # Joules
-
-    smin = -0.8; smax = -smin  # -0.19
-    sleft = -0.38; sright = -0.35
-    Ns = 39
-    s = np.linspace(smin, smax, Ns)
-
-    eta_in = np.zeros(Ns)
-    eta_out = np.zeros(Ns)
-    eta_tot = np.zeros(Ns)
-
-    # We create the parallel processes.
-    pool = Pool(processes=Nprocs)
-    # We calculate the efficiencies in parallel.
-
-    procs = [pool.apply_async(efficiencies_t0wenergies,
-                              [[s[i], ewrite, eread], explicit_decoherence])
-             for i in range(Ns)]
-
-    # We get the results.
-    aux = [procs[i].get() for i in range(Ns)]
-    pool.close()
-    pool.join()
-
-    for i in range(Ns): eta_in[i], eta_out[i], eta_tot[i] = aux[i]
-
-    #############################################
-    # Let us plot this.
-    fig = plt.figure()
-    ax1 = fig.add_subplot(111)
-
-    ax1.plot(s, eta_in, "r:",
-             label=r"$\mathrm{Theory} \ \eta_{\mathrm{in }}$")
-    ax1.plot(s, eta_out, "b:",
-             label=r"$\mathrm{Theory} \ \eta_{\mathrm{out}}$")
-    ax1.plot(s, eta_tot, "k:",
-             label=r"$\mathrm{Theory} \ \eta_{\mathrm{tot}}$")
-    ax1.legend(fontsize=15, loc=1)
-
-    ax1.plot([sleft, sleft], [0, 0.8], color="green", alpha=0.5)
-    ax1.plot([sright, sright], [0, 0.8], color="green", alpha=0.5)
-
-    eta_in_ind_phot = 0.685
-    eta_tot_ind_phot = 0.15
-    eta_out_ind_phot = eta_tot_ind_phot/eta_in_ind_phot
-
-    error_in = 0.019
-    error_tot = 0.019
-    error_out = (Measurement(eta_tot_ind_phot, error_tot) /
-                 Measurement(eta_in_ind_phot, error_in)).sigma
-
-    ax1.fill_between(s, eta_in_ind_phot-error_in, eta_in_ind_phot+error_in,
-                     facecolor='red', alpha=0.5)
-    ax1.fill_between(s, eta_out_ind_phot-error_out, eta_out_ind_phot+error_out,
-                     facecolor='blue', alpha=0.5)
-    ax1.fill_between(s, eta_tot_ind_phot-error_tot, eta_tot_ind_phot+error_tot,
-                     facecolor='black', alpha=0.5)
-
-    ax1.plot(s, [eta_in_ind_phot]*Ns, "r")
-    ax1.plot(s, [eta_out_ind_phot]*Ns, "b")
-    ax1.plot(s, [eta_tot_ind_phot]*Ns, "k")
-
-    ax1.set_xlabel(r"$t_{\mathrm{w0}} -t_{\mathrm{s0}} \ \mathrm{(ns)}$",
-                   fontsize=20)
-    ax1.set_ylabel(r"$\mathrm{Efficiency}$", fontsize=20)
-    ax1.set_xlim([smin, smax])
-    ax1.set_ylim([0, None])
-
-    ax2 = ax1.twiny()
-
-    def tick_function(X):
-        """Return the tick values in space."""
-        V = c*X*1e-9/2.0*100
-
-        return [str(z) for z in V]
-
-    x2_ticks = [-12.0, -5.5, -5.0, -4.5, -4.0, -3.5, -3.0]
-    x2_ticks = range(-12, 13, 2)
-    new_tick_locations = np.array([i/c/1e-9*2/100 for i in x2_ticks])
-    ax2.set_xlim(ax1.get_xlim())
-    ax2.set_xticks(new_tick_locations)
-    ax2.set_xticklabels(tick_function(new_tick_locations))
-    ax2.set_xlabel(r"$\mathrm{Overlap \ point \ (cm)}$", fontsize=20)
-
-    plt.savefig("delay_dependence.png", bbox_inches="tight")
-    plt.savefig("delay_dependence.pdf", bbox_inches="tight")
-    plt.close("all")
-    ##############################################
-
-    print
-    print "For the single-photon experiment:"
-    print "The fitted values are:"
-    print "r1:", x14[0]*default_params["r1"]/a0, "Bohr radii"
-    print "r2:", x14[1]*default_params["r2"]/a0, "Bohr radii"
-    print "t0w - t0s:", (sleft+sright)/2.0, "ns"
-    print "overlap at:", (sleft+sright)*1e-9/2.0*c/2.0*1e2,
-    print "cm from the center of the cell."
+    # # We use the fitted values to the efficiencies at
+    # # different meeting points
+    # print
+    # print "Calculating the efficiencies for the single-photon experiment..."
+    # ewrite = 210e-12  # Joules
+    # eread = 970e-12  # Joules
+    #
+    # smin = -0.8; smax = -smin  # -0.19
+    # sleft = -0.38; sright = -0.35
+    # Ns = 39
+    # s = np.linspace(smin, smax, Ns)
+    #
+    # eta_in = np.zeros(Ns)
+    # eta_out = np.zeros(Ns)
+    # eta_tot = np.zeros(Ns)
+    #
+    # # We create the parallel processes.
+    # pool = Pool(processes=Nprocs)
+    # # We calculate the efficiencies in parallel.
+    #
+    # procs = [pool.apply_async(efficiencies_t0wenergies,
+    #                           [[s[i], ewrite, eread], explicit_decoherence])
+    #          for i in range(Ns)]
+    #
+    # # We get the results.
+    # aux = [procs[i].get() for i in range(Ns)]
+    # pool.close()
+    # pool.join()
+    #
+    # for i in range(Ns): eta_in[i], eta_out[i], eta_tot[i] = aux[i]
+    #
+    # #############################################
+    # # Let us plot this.
+    # fig = plt.figure()
+    # ax1 = fig.add_subplot(111)
+    #
+    # ax1.plot(s, eta_in, "r:",
+    #          label=r"$\mathrm{Theory} \ \eta_{\mathrm{in }}$")
+    # ax1.plot(s, eta_out, "b:",
+    #          label=r"$\mathrm{Theory} \ \eta_{\mathrm{out}}$")
+    # ax1.plot(s, eta_tot, "k:",
+    #          label=r"$\mathrm{Theory} \ \eta_{\mathrm{tot}}$")
+    # ax1.legend(fontsize=15, loc=1)
+    #
+    # ax1.plot([sleft, sleft], [0, 0.8], color="green", alpha=0.5)
+    # ax1.plot([sright, sright], [0, 0.8], color="green", alpha=0.5)
+    #
+    # eta_in_ind_phot = 0.685
+    # eta_tot_ind_phot = 0.15
+    # eta_out_ind_phot = eta_tot_ind_phot/eta_in_ind_phot
+    #
+    # error_in = 0.019
+    # error_tot = 0.019
+    # error_out = (Measurement(eta_tot_ind_phot, error_tot) /
+    #              Measurement(eta_in_ind_phot, error_in)).sigma
+    #
+    # ax1.fill_between(s, eta_in_ind_phot-error_in, eta_in_ind_phot+error_in,
+    #                  facecolor='red', alpha=0.5)
+    # ax1.fill_between(s, eta_out_ind_phot-error_out, eta_out_ind_phot+error_out,
+    #                  facecolor='blue', alpha=0.5)
+    # ax1.fill_between(s, eta_tot_ind_phot-error_tot, eta_tot_ind_phot+error_tot,
+    #                  facecolor='black', alpha=0.5)
+    #
+    # ax1.plot(s, [eta_in_ind_phot]*Ns, "r")
+    # ax1.plot(s, [eta_out_ind_phot]*Ns, "b")
+    # ax1.plot(s, [eta_tot_ind_phot]*Ns, "k")
+    #
+    # ax1.set_xlabel(r"$t_{\mathrm{w0}} -t_{\mathrm{s0}} \ \mathrm{(ns)}$",
+    #                fontsize=20)
+    # ax1.set_ylabel(r"$\mathrm{Efficiency}$", fontsize=20)
+    # ax1.set_xlim([smin, smax])
+    # ax1.set_ylim([0, None])
+    #
+    # ax2 = ax1.twiny()
+    #
+    # def tick_function(X):
+    #     """Return the tick values in space."""
+    #     V = c*X*1e-9/2.0*100
+    #
+    #     return [str(z) for z in V]
+    #
+    # x2_ticks = [-12.0, -5.5, -5.0, -4.5, -4.0, -3.5, -3.0]
+    # x2_ticks = range(-12, 13, 2)
+    # new_tick_locations = np.array([i/c/1e-9*2/100 for i in x2_ticks])
+    # ax2.set_xlim(ax1.get_xlim())
+    # ax2.set_xticks(new_tick_locations)
+    # ax2.set_xticklabels(tick_function(new_tick_locations))
+    # ax2.set_xlabel(r"$\mathrm{Overlap \ point \ (cm)}$", fontsize=20)
+    #
+    # plt.savefig("delay_dependence.png", bbox_inches="tight")
+    # plt.savefig("delay_dependence.pdf", bbox_inches="tight")
+    # plt.close("all")
+    # ##############################################
+    #
+    # print
+    # print "For the single-photon experiment:"
+    # print "The fitted values are:"
+    # print "r1:", x14[0]*default_params["r1"]/a0, "Bohr radii"
+    # print "r2:", x14[1]*default_params["r2"]/a0, "Bohr radii"
+    # print "t0w - t0s:", (sleft+sright)/2.0, "ns"
+    # print "overlap at:", (sleft+sright)*1e-9/2.0*c/2.0*1e2,
+    # print "cm from the center of the cell."

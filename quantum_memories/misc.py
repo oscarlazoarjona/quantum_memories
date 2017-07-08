@@ -256,6 +256,12 @@ def set_parameters_ladder(custom_parameters=None, fitted_couplings=True):
         pms.update({"r1": pms["r1"]*0.23543177})
         pms.update({"r2": pms["r2"]*0.81360687})
 
+    pms["ns"] = 1
+    pms["nw"] = 1
+    pms["nr"] = 1
+    pms["USE_HG_CTRL"] = False
+    pms["USE_HG_SIG"] = False
+
     return pms
 
 
