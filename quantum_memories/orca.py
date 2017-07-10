@@ -28,6 +28,7 @@ from misc import efficiencies, vapour_number_density
 from misc import Omega2_HG, Omega1_initial_HG, Omega1_boundary_HG
 from scipy.constants import physical_constants
 from scipy.linalg import svd
+import warnings
 
 a0 = physical_constants["Bohr radius"][0]
 # We set matplotlib to use a nice latex font.
@@ -407,6 +408,7 @@ def solve(params, plots=False, name="", integrate_velocities=False,
     ti = 0.0
     rhoii = rho[0]
     Om1ii = Om1[0]
+    warnings.filterwarnings("error")
     for ii in range(Nt-1):
 
         rhok1, Om1k1 = f(rhoii, Om1ii, ti, params, flag=1)
@@ -592,6 +594,13 @@ def ket(v):
     return v.reshape((len(v), 1))
 
 
+def rel_error(a, b):
+    r"""Get the relative error between two quantities."""
+    m = max([abs(a), abs(b)])
+    n = min([abs(a), abs(b)])
+    return 1 - float(n)/m
+
+
 def greens(params, index, Nhg=5):
     r"""Calculate the Green's function using params."""
     # We build the Green's function.
@@ -606,8 +615,11 @@ def greens(params, index, Nhg=5):
 
     phi = []; psi = []
     Gri = np.zeros((Ntout, Nt), complex)
+    print "The size of Green's function", Gri.shape
+    Nhg = 15
+    Kprev = 1e6
     for ii in range(Nhg):
-        # print ("Mode order %i" % ii)
+        print ("Mode order %i" % ii)
         params["ns"] = ii
         # We solve for the Hermite Gauss mode of order 0.
         aux = solve(params, integrate_velocities=True)
@@ -623,19 +635,27 @@ def greens(params, index, Nhg=5):
         phi += [Om1_in]
         psi += [Om1_out]
 
-        if ii >= 4:
+        if ii >= 2:
             U, D, V = svd(Gri)
             DD = D/np.sqrt(sum(D**2))
             K = 1.0/(DD**4).sum()
-            check = ii >= 3*K
-            print "check:", check, ii, 7*K, K, D[: 5]
+            K_change = rel_error(K, Kprev)
+
+            check = K_change <= 0.01
+            print ii, K, Kprev, K_change, check
             if check:
                 break
-    Nhg = ii
-    # We check that the Green's function does its job.
+            Kprev = K
+            # check = ii >= 8*K
+            # print "check:", check, ii, 8*K, K, D[: 5]
+            # if check:
+            #     break
+    # U, D, V = svd(Gri)
+    print "Checking the SVD..."
+
     print "Checking Green's function..."
     plt.close("all")
-
+    Nhg = ii
     plt.figure()
     for i in range(Nhg):
         # print ".............."
@@ -645,15 +665,98 @@ def greens(params, index, Nhg=5):
         Ncal = num_integral(t_out, psi_cal*psi_cal.conjugate())
         print i, Nin, Nout, Ncal
         plt.subplot(211)
-        plt.plot(t_sample, phi[i]*phi[i].conjugate(), label=str(i))
+        plt.plot(t_sample, np.abs(phi[i]*phi[i].conjugate()), label=str(i))
         plt.subplot(212)
-        plt.plot(t_out, psi[i]*psi[i].conjugate(), label=str(i))
+        plt.plot(t_out, np.abs(psi[i]*psi[i].conjugate()), label=str(i))
     plt.subplot(211)
     plt.legend()
     plt.subplot(212)
     plt.legend()
     plt.savefig("a"+str(index)+".png")
     plt.close("all")
+
+    print "testing singular modes..."
+    plt.figure()
+    for ii in range(Nhg):
+        # print ".............."
+        dt = t_sample[1]-t_sample[0]
+        phii = V[ii, :].conjugate()/np.sqrt(dt)
+        Nin = num_integral(t_sample, phii*phii.conjugate())
+        Nout = D[ii]**2
+        psi_cal = Gri.dot(ket(phii)).reshape(Ntout)
+        Ncal = num_integral(t_out, psi_cal*psi_cal.conjugate())
+        nn = sum(V[ii, :]*V[ii, :].conjugate())
+        print ii, Nin, Nout, Ncal, Nout/np.sqrt(dt), dt, nn
+        plt.subplot(211)
+        plt.plot(t_sample, 1e-9*np.abs(phii*phii.conjugate()),
+                 label=str(ii))
+        plt.subplot(212)
+        plt.plot(t_out, np.abs(U[:, ii]*U[:, ii].conjugate()),
+                 label=str(ii))
+    plt.subplot(211)
+    plt.legend()
+    plt.subplot(212)
+    plt.legend()
+    plt.savefig("b"+str(index)+".png")
+    plt.close("all")
+
+    # Vhg = V
+    # # We make the Green's function converge.
+    # print "Using single modes..."
+    # Gri = np.zeros((Ntout, Nt), complex)
+    # Nmodes = Nhg
+    # phi = []; psi = []
+    # for ii in range(Nmodes):
+    #     print ("Mode order %i" % ii)
+    #     params["ns"] = ii
+    #     norm = num_integral(t_sample, Vhg[ii, :]*Vhg[ii, :].conjugate())
+    #     phi_i = Vhg[ii, :] / np.sqrt(np.real(norm))
+    #     # We solve for the Hermite Gauss mode of order 0.
+    #     aux = solve(params, integrate_velocities=True,
+    #                 input_signal=phi_i)
+    #     t_sample, Z, rho31, Om1 = aux
+    #     Nt = len(t_sample); dt = t_sample[1]-t_sample[0]
+    #
+    #     # Extract input and output.
+    #     Om1_in = Om1[:, 0]
+    #     Om1_out = np.array([Om1[i, -1] for i in range(Nt)
+    #                         if t_sample[i] > t_cutoff])
+    #     Ntout = len(Om1_out)
+    #     Gri += ket(Om1_out).dot(bra(Om1_in))*dt
+    #     phi += [Om1_in]
+    #     psi += [Om1_out]
+    #     # if ii >= 4:
+    #     #     U, D, V = svd(Gri)
+    #     #     DD = D/np.sqrt(sum(D**2))
+    #     #     K = 1.0/(DD**4).sum()
+    #     #     check = ii >= 3*K
+    #     #     print "check:", check, ii, 3*K, K, D[: 5]
+    #     #     if check:
+    #     #         break
+    #
+    # Nhg = ii
+    # # We check that the Green's function does its job.
+    # print "Checking Green's function..."
+    #
+    # plt.close("all")
+    # plt.figure()
+    # for i in range(Nmodes):
+    #     # print ".............."
+    #     Nin = num_integral(t_sample, phi[i]*phi[i].conjugate())
+    #     Nout = num_integral(t_out, psi[i]*psi[i].conjugate())
+    #     psi_cal = Gri.dot(ket(phi[i])).reshape(Ntout)
+    #     Ncal = num_integral(t_out, psi_cal*psi_cal.conjugate())
+    #     print i, Nin, Nout, Ncal
+    #     plt.subplot(211)
+    #     plt.plot(t_sample, np.abs(phi[i]*phi[i].conjugate()), label=str(i))
+    #     plt.subplot(212)
+    #     plt.plot(t_out, np.abs(psi[i]*psi[i].conjugate()), label=str(i))
+    # plt.subplot(211)
+    # plt.legend()
+    # plt.subplot(212)
+    # plt.legend()
+    # plt.savefig("b"+str(index)+".png")
+    # plt.close("all")
 
     return Gri, t_sample, t_out
 
@@ -669,12 +772,14 @@ def optimize_signal(params, index, Nhg=5, plots=False, check=False,
     U, D, V = svd(Gri)
 
     # We extract the optimal modes.
-    optimal_input = rescale_input(t_sample, V[0, :], params)
+    optimal_input = rescale_input(t_sample, V[0, :].conjugate(), params)
+    # print np.amax(np.real(V[0, :]*V[0, :].conjugate())),
+    # print np.amax(np.real(optimal_input*optimal_input.conjugate()))
     ##########################################################################
     # We check that the Green's function actually returns the expected thing.
     if check:
         Om1_in_actual = rescale_input(t_sample, optimal_input, params)
-        t_sample, Z, rho31, Om1 = solve(params, plots=False,
+        t_sample, Z, rho31, Om1 = solve(params, plots=True,
                                         name=name,
                                         integrate_velocities=True,
                                         input_signal=Om1_in_actual)
@@ -685,7 +790,7 @@ def optimize_signal(params, index, Nhg=5, plots=False, check=False,
                                GOm1_in_actual*GOm1_in_actual.conjugate())
 
         eff_in, eff_out, eff = efficiencies(t_sample, Om1, params,
-                                            plots=True, name=name)
+                                            plots=True, name=name+str(index))
         # DD = D/np.sqrt(sum(D**2))
         print "The SVD-calculated efficiency is", D[0]**2
         print "The Green's function-calculated efficiency is", eff_cal
@@ -750,6 +855,7 @@ def optimize_signal(params, index, Nhg=5, plots=False, check=False,
     # The return.
     optimal_output = Gri.dot(ket(optimal_input)).reshape(Ntout)
     optimal_efficiency = D[0]**2
+    # optimal_efficiency = eff_cal
     return optimal_input, optimal_output, optimal_efficiency, eff
 
 

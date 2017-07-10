@@ -23,7 +23,6 @@ from quantum_memories.orca import efficiencies_t0wenergies
 from quantum_memories.orca import optimize_signal
 from quantum_memories.settings_ladder import optimize
 
-
 def chi2(xx):
     r"""Get the sum of squared residues for the fit of the efficiencies.
 
@@ -74,6 +73,20 @@ def chi2(xx):
         print
         print "Data point", i, params["t_cutoff"]
         params["USE_HG_SIG"] = True
+        # params["L"] = 0.01
+        # params["D"] = 1.05*params["L"]
+        # params["Nt"] = 180000
+        # params["sampling_rate"] = 50*8
+
+        params["t0w"] = params["t0s"]
+        t0s_new = 2e-9
+        corr = t0s_new-params["t0s"]
+        params["t0s"] = t0s_new
+        params["t0w"] = params["t0s"]
+        params["t0r"] = params["t0w"]+3.5e-9
+        params["t_cutoff"] = params["t_cutoff"]+corr
+        # print params
+
         aux = optimize_signal(params, i, plots=True, check=True)
         opt_in, opt_out, opt_eta, act_eta = aux
         opt_eff += [opt_eta]
