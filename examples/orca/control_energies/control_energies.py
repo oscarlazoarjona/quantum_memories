@@ -187,6 +187,21 @@ if __name__ == '__main__':
     for i in range(len(energies_cont)):
         eff_in[i], eff_out[i], eff[i] = aux[i]
 
+    # We save the measured efficiencies.
+    np.savez_compressed("experimental_data",
+                        energies=energies,
+                        eff_in_meas=eff_in_meas,
+                        eff_out_meas=eff_out_meas,
+                        eff_meas=eff_meas,
+                        error_out=error_out)
+
+    # We save the fitted efficiencies.
+    np.savez_compressed("fitted_data",
+                        energies_cont=energies_cont,
+                        eff_in=eff_in,
+                        eff_out=eff_out,
+                        eff=eff)
+
     # We plot the measured efficiencies.
     plt.errorbar(energies*1e12, eff_in_meas, yerr=0.01,
                  fmt="ro", ms=3, capsize=2, label=r"$\eta_{\mathrm{in}}$")
