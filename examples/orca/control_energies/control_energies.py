@@ -66,13 +66,17 @@ def chi2(xx):
     opt_eff = []
     act_eff = []
     print "Calculating optimized efficiencies..."
-    for i in range(len(energies)):
+    energies2 = np.linspace(10e-12, 2500e-12, 20)
+    energies2 = energies
+    energies2 = np.linspace(10e-12, 1000e-12, 40)
+    for i in range(len(energies2)):
 
-        params = efficiencies_r1r2t0w(energies[i], xx, explicit_decoherence,
+        params = efficiencies_r1r2t0w(energies2[i], xx, explicit_decoherence,
                                       str(i), return_params=True)
         print
-        print "Data point", i, params["t_cutoff"]
+        print "Data point", i, energies2[i]*1e12
         params["USE_HG_SIG"] = True
+
         # params["L"] = 0.01
         # params["D"] = 1.05*params["L"]
         # params["Nt"] = 180000
@@ -84,9 +88,26 @@ def chi2(xx):
         params["t0s"] = t0s_new
         params["t0w"] = params["t0s"]
         params["t0r"] = params["t0w"]+3.5e-9
-        params["t_cutoff"] = params["t_cutoff"]+corr
-        # print params
 
+        corr2 = 1e-9
+        params["t_cutoff"] = 2.7e-9
+        params["t0w"] = params["t0s"] - 5.373288999998793e-11
+        params["t0r"] = params["t0w"] + 2.26e-9 + corr2
+        params["delta1"] = -7.06e9*2*np.pi
+        params["energy_pulse1"] = energies2[i]
+        params["alpha_rw"] = np.sqrt(954.89075375/48.8)
+        params["Temperature"] = 273.15 + 119.9
+
+        Llong = 0.14
+        corr3 = Llong - params["L"]
+        params["L"] = Llong
+        params["D"] = 1.05*params["L"]
+        params["t0w"] = params["t0w"] + corr3/c
+        params["t0r"] = params["t0r"] + corr3/c
+        params["t_cutoff"] = 4.5e-9
+
+        # params["t_cutoff"] = params["t_cutoff"]+corr+corr2*0.5
+        params["explicit_decoherence"] = 1.0
         aux = optimize_signal(params, i, plots=True, check=True)
         opt_in, opt_out, opt_eta, act_eta = aux
         opt_eff += [opt_eta]
@@ -105,8 +126,8 @@ def chi2(xx):
     # plt.plot(energies*1e12, eff_out, "b-")
     # plt.plot(energies*1e12, eff, "k-")
     chi22 = 1.0
-    plt.plot(energies*1e12, opt_eff, "g-")
-    plt.plot(energies*1e12, act_eff, "g--")
+    plt.plot(energies2*1e12, opt_eff, "g-")
+    plt.plot(energies2*1e12, act_eff, "g--")
 
     plt.ylim([-0.02, None])
     plt.xlabel(r"$E_c \ \mathrm{(pJ)}$", fontsize=20)

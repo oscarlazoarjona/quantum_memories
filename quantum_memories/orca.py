@@ -651,7 +651,6 @@ def greens(params, index, Nhg=5):
             # if check:
             #     break
     # U, D, V = svd(Gri)
-    print "Checking the SVD..."
 
     print "Checking Green's function..."
     plt.close("all")
@@ -685,8 +684,7 @@ def greens(params, index, Nhg=5):
         Nout = D[ii]**2
         psi_cal = Gri.dot(ket(phii)).reshape(Ntout)
         Ncal = num_integral(t_out, psi_cal*psi_cal.conjugate())
-        nn = sum(V[ii, :]*V[ii, :].conjugate())
-        print ii, Nin, Nout, Ncal, Nout/np.sqrt(dt), dt, nn
+        print ii, Nin, Nout, Ncal
         plt.subplot(211)
         plt.plot(t_sample, 1e-9*np.abs(phii*phii.conjugate()),
                  label=str(ii))

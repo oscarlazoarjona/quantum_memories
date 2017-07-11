@@ -334,6 +334,13 @@ def efficiencies(t, Om1, params, plots=False, name="",
     dphotons_ini_dt = const1 * np.real(Om1[:, +0]*Om1[:, +0].conjugate())
     dphotons_out_dt = const1 * np.real(Om1[:, -1]*Om1[:, -1].conjugate())
 
+    dphase_ini = np.unwrap(np.angle(Om1[:, +0]))
+    # dphase_out = np.angle(Om1[:, -1])
+    # dphase_tra = np.array([dphase_out[i] for i in range(Nt)
+    #                        if t[i] < t_cutoff])
+    # dphase_ret = np.array([dphase_out[i] for i in range(Nt)
+    #                        if t[i] > t_cutoff])
+
     dt = t[1]-t[0]
 
     # We separate the output at the cutoff time.
@@ -348,15 +355,23 @@ def efficiencies(t, Om1, params, plots=False, name="",
     dphotons_out_dt_re = np.array(dphotons_out_dt_re)*explicit_decoherence
 
     if plots:
-        plt.plot(t*Omega*1e9, dphotons_ini_dt/Omega*1e-9, "g-",
+        fig, ax1 = plt.subplots()
+        ax1.plot(t*Omega*1e9, dphotons_ini_dt/Omega*1e-9, "g-",
                  label=r"$\mathrm{Signal} \ @ \ z=-D/2$")
-        plt.plot(t_tr*Omega*1e9, dphotons_out_dt_tr/Omega*1e-9, "r-",
+        ax1.plot(t_tr*Omega*1e9, dphotons_out_dt_tr/Omega*1e-9, "r-",
                  label=r"$\mathrm{Signal} \ @ \ z=+D/2$")
-        plt.plot(t_re*Omega*1e9, dphotons_out_dt_re/Omega*1e-9, "b-",
+        ax1.plot(t_re*Omega*1e9, dphotons_out_dt_re/Omega*1e-9, "b-",
                  label=r"$\mathrm{Signal} \ @ \ z=+D/2$")
-        plt.xlabel(r"$ t \ (\mathrm{ns})$", fontsize=20)
-        plt.ylabel(r"$ \mathrm{photons/ns}$", fontsize=20)
+        ax1.set_xlabel(r"$ t \ (\mathrm{ns})$", fontsize=20)
+        ax1.set_ylabel(r"$ \mathrm{photons/ns}$", fontsize=20)
         plt.legend(fontsize=15)
+
+        ax2 = ax1.twinx()
+        ax2.plot(t*Omega*1e9, dphase_ini*180/np.pi, "g:")
+        # ax2.plot(t_tr*Omega*1e9, dphase_tra*180/np.pi, "r:")
+        # ax2.plot(t_re*Omega*1e9, dphase_ret*180/np.pi, "b:")
+        ax2.set_ylabel(r"$ \mathrm{Phase \ (degrees)}$", fontsize=20)
+
         plt.savefig(name+"_inout.png", bbox_inches="tight")
         plt.close("all")
 
