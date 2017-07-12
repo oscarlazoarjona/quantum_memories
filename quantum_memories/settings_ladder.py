@@ -90,7 +90,7 @@ sigma_power1 = 1.0e9
 sigma_power2 = 1.0e9
 
 sigma_power1 = 0.807222536902e9
-sigma_power1 = 1.0e9
+# sigma_power1 = 1.0e9
 sigma_power2 = 0.883494520871e9
 
 # We calculate the duration of the pulses from the standard deviations
