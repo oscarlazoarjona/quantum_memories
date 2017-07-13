@@ -20,7 +20,8 @@ from time import time
 from quantum_memories.misc import set_parameters_ladder, Measurement
 from quantum_memories.orca import efficiencies_r1r2t0w
 from quantum_memories.orca import efficiencies_t0wenergies
-from quantum_memories.settings_ladder import optimize
+import pandas as pd
+# from quantum_memories.settings_ladder import optimize
 
 
 def chi2(xx):
@@ -57,11 +58,11 @@ def chi2(xx):
     chi22 += sum([(eff_in_meas[i]-eff_in[i])**2 for i in range(len(energies))])
 
     # We plot the measured efficiencies.
-    plt.errorbar(energies*1e12, eff_in_meas, yerr=0.01,
+    plt.errorbar(energies*1e12, eff_in_meas, yerr=error_in,
                  fmt="ro", ms=3, capsize=2, label=r"$\eta_{\mathrm{in}}$")
     plt.errorbar(energies*1e12, eff_out_meas, yerr=error_out,
                  fmt="bo", ms=3, capsize=2, label=r"$\eta_{\mathrm{out}}$")
-    plt.errorbar(energies*1e12, eff_meas, yerr=0.01,
+    plt.errorbar(energies*1e12, eff_meas, yerr=error_tot,
                  fmt="ko", ms=3, capsize=2, label=r"$\eta_{\mathrm{tot}}$")
 
     # We plot the calculated efficiencies.
@@ -84,6 +85,8 @@ def chi2(xx):
 
 # We set the default parameters, taken from settings.py.
 default_params = set_parameters_ladder(fitted_couplings=False)
+optimize = True
+optimize = False
 if __name__ == '__main__':
 
     Nprocs = cpu_count()
@@ -117,11 +120,13 @@ if __name__ == '__main__':
     eff_out_meas = eff_meas/eff_in_meas
 
     # We calculate the error bars for the readout efficiency.
-    error_out = []
+    error_tot = []; error_in = []; error_out = []
     for i in range(len(eff_meas)):
-        dati = Measurement(eff_meas[i], 0.01)
-        dat_ini = Measurement(eff_in_meas[i], 0.01)
+        dati = Measurement(eff_meas[i], 0.01*eff_meas[i])
+        dat_ini = Measurement(eff_in_meas[i], 0.01*eff_in_meas[i])
         dat_outi = dati/dat_ini
+        error_tot += [dati.sigma]
+        error_in += [dat_ini.sigma]
         error_out += [dat_outi.sigma]
 
     rep_rate = 160e6
@@ -140,6 +145,7 @@ if __name__ == '__main__':
     # x14 = [0.23382219, 0.81674232, -0.41974531]
     x14 = [0.23380502, 0.81678002, -0.41974288]
     x14 = [0.23543177, 0.81360687, -0.420853]  # A nice one! 0.0201248140575
+    x14 = [0.25647587, 0.72259249, -0.43641079]
 
     if optimize:
         print "Optimizing..."
@@ -187,13 +193,16 @@ if __name__ == '__main__':
     for i in range(len(energies_cont)):
         eff_in[i], eff_out[i], eff[i] = aux[i]
 
+    #########################################################################
     # We save the measured efficiencies.
     np.savez_compressed("experimental_data",
                         energies=energies,
                         eff_in_meas=eff_in_meas,
                         eff_out_meas=eff_out_meas,
                         eff_meas=eff_meas,
-                        error_out=error_out)
+                        error_out=error_out,
+                        error_in=error_in,
+                        error_tot=error_tot)
 
     # We save the fitted efficiencies.
     np.savez_compressed("fitted_data",
@@ -202,12 +211,30 @@ if __name__ == '__main__':
                         eff_out=eff_out,
                         eff=eff)
 
+    exp_data = np.asarray([energies, eff_in_meas, eff_out_meas, eff_meas,
+                           error_in, error_out, error_tot]).T
+    fitted_data = np.asarray([energies_cont, eff_in, eff_out, eff]).T
+
+    exp_data = pd.DataFrame(exp_data)
+    fitted_data = pd.DataFrame(fitted_data)
+    exp_data.to_csv("file_path.csv", header=["energies",
+                                             "eff_in",
+                                             "eff_out",
+                                             "eff_tot",
+                                             "error_int",
+                                             "error_out",
+                                             "error_tot"])
+    fitted_data.to_csv("fitted_data.csv", header=["energies",
+                                                  "eff_in",
+                                                  "eff_out",
+                                                  "eff_tot"])
+
     # We plot the measured efficiencies.
-    plt.errorbar(energies*1e12, eff_in_meas, yerr=0.01,
+    plt.errorbar(energies*1e12, eff_in_meas, yerr=error_in,
                  fmt="ro", ms=3, capsize=2, label=r"$\eta_{\mathrm{in}}$")
     plt.errorbar(energies*1e12, eff_out_meas, yerr=error_out,
                  fmt="bo", ms=3, capsize=2, label=r"$\eta_{\mathrm{out}}$")
-    plt.errorbar(energies*1e12, eff_meas, yerr=0.01,
+    plt.errorbar(energies*1e12, eff_meas, yerr=error_tot,
                  fmt="ko", ms=3, capsize=2, label=r"$\eta_{\mathrm{tot}}$")
 
     # We plot the calculated efficiencies.
