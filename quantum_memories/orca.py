@@ -287,18 +287,6 @@ def solve(params, plots=False, name="", integrate_velocities=False,
         Omega1_initial = Omega1_peak*np.exp(-4*np.log(2.0) *
                                             (-t0s-Z/c)**2/tau1**2)
 
-    # const1 = np.pi*c*epsilon_0*hbar*(w1/e_charge/r1)**2/16.0/omega_laser1
-    # dtt = t[1]-t[0]
-    # Nin = sum([Omega1_boundary[ii]*Omega1_boundary[ii].conjugate()
-    #            for ii in range(Nt)])*dtt*const1
-    #
-    # print Omega1_peak, const1
-    # print omega_laser1, Nt, T, D
-    # print t0s, tau1, w1, energy_pulse1
-    # print e_charge, r1, epsilon_0, hbar, c
-    # print energy_pulse1/hbar/omega_laser1
-    # print Nin, 111
-
     Om1[0] = Omega1_initial
 
     # The coupling coefficient for the signal field.
@@ -324,7 +312,7 @@ def solve(params, plots=False, name="", integrate_velocities=False,
     # print r1/a0
     # print hbar, epsilon_0, c
 
-    def f(rhoi, Om1i, ti, params, flag=False):
+    def rhs(rhoi, Om1i, ti, params, flag=False):
         # We unpack the parameters.
         delta1, delta2, gamma21, gamma32, g1 = params[:5]
         Omega2_peak, tau2, t0w, t0r, alpha_rw = params[5:10]
@@ -403,6 +391,12 @@ def solve(params, plots=False, name="", integrate_velocities=False,
 
         return np.array([eq1, eq2]), eq3
 
+    def f(ti, yyii):
+        rhoi = yyii[0]
+        Om1i = yyii[1]
+        rhok, Om1k = rhs(rhoi, Om1i, ti, params, flag=False)
+        return np.array([rhok, Om1k])
+
     ii = 0
     # We carry out the Runge-Kutta method.
     ti = 0.0
@@ -411,17 +405,20 @@ def solve(params, plots=False, name="", integrate_velocities=False,
     warnings.filterwarnings("error")
     for ii in range(Nt-1):
 
-        rhok1, Om1k1 = f(rhoii, Om1ii, ti, params, flag=1)
+        yyii = np.array([rhoii, Om1ii])
+        k1 = f(ti, yyii)
 
-        rhok2, Om1k2 = f(rhoii+rhok1*dt/2.0, Om1ii+Om1k1*dt/2.0,
-                         ti+dt/2.0, params, flag=2)
+        k2 = f(ti+dt*0.5, yyii+k1*dt*0.5)
 
-        rhok3, Om1k3 = f(rhoii+rhok2*dt/2.0, Om1ii+Om1k2*dt/2.0,
-                         ti+dt/2.0, params, flag=3)
+        k3 = f(ti+dt*0.5, yyii+k2*dt*0.5)
 
-        rhok4, Om1k4 = f(rhoii+rhok3*dt, Om1ii+Om1k3*dt,
-                         ti+dt, params, flag=4)
+        k4 = f(ti+dt, yyii+k3*dt)
         # The solution at time ti + dt:
+        rhok1 = k1[0]; Om1k1 = k1[1]
+        rhok2 = k2[0]; Om1k2 = k2[1]
+        rhok3 = k3[0]; Om1k3 = k3[1]
+        rhok4 = k4[0]; Om1k4 = k4[1]
+
         ti = ti + dt
         rhoii = rhoii + (rhok1+2*rhok2+2*rhok3+rhok4)*dt/6.0
         Om1ii = Om1ii + (Om1k1+2*Om1k2+2*Om1k3+Om1k4)*dt/6.0
