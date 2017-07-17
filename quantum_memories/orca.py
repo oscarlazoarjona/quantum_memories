@@ -55,17 +55,17 @@ def pack_sol(rho, Om1, Nt, Nrho, Nv, Nz):
 
 def unpack_slice(yyii, Nt, Nrho, Nv, Nz):
     r"""Unpack a time slice yyii into meaningful variable names."""
-    Om1i = yyii[0, :]
-    rhoi = yyii[1:, :].reshape((Nrho, Nv, Nz))
+    Om1i = yyii[: Nz]
+    rhoi = yyii[Nz:].reshape((Nrho, Nv, Nz))
     return rhoi, Om1i
 
 
 def pack_slice(rhoi, Om1i, Nt, Nrho, Nv, Nz):
-    r"""Pack slices rho21i, rho31i, Om1i into an array yyii."""
-    rhoi = rhoi.reshape((Nrho*Nv, Nz))
-    yyii = np.zeros((1+Nrho*Nv, Nz), complex)
-    yyii[0, :] = Om1i
-    yyii[1:, :] = rhoi
+    r"""Pack slices rhoi, Om1i into an array yyii."""
+    rhoi = rhoi.reshape((Nrho*Nv*Nz))
+    yyii = np.zeros((1+Nrho*Nv)*Nz, complex)
+    yyii[:Nz] = Om1i
+    yyii[Nz:] = rhoi
     return yyii
 
 
@@ -405,7 +405,7 @@ def solve(params, plots=False, name="", integrate_velocities=False,
 
     solver = ode(f)
     solver.set_integrator('lsoda', method='bdf')
-    # solver.set_initial_value(yyii, ti)
+    solver.set_initial_value(yyii, ti)
     # while solver.successful() and solver.t < t[-2]:
     ii = 0
 
