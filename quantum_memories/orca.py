@@ -29,7 +29,7 @@ from misc import Omega2_HG, Omega1_initial_HG, Omega1_boundary_HG
 from scipy.constants import physical_constants
 from scipy.linalg import svd
 from scipy.integrate import complex_ode as ode
-import warnings
+# import warnings
 
 a0 = physical_constants["Bohr radius"][0]
 # We set matplotlib to use a nice latex font.
@@ -334,7 +334,7 @@ def solve(params, plots=False, name="", integrate_velocities=False,
               omega_laser1, omega_laser2)
 
     # We define the equations that the Runge-Kutta method will solve.
-    def rhs(rhoi, Om1i, ti, params, flag=False):
+    def rhs(rhoi, Om1i, ti, params):
         # We unpack the parameters.
         delta1, delta2, gamma21, gamma32, g1 = params[:5]
         Omega2_peak, tau2, t0w, t0r, alpha_rw = params[5:10]
@@ -387,9 +387,11 @@ def solve(params, plots=False, name="", integrate_velocities=False,
 
         return np.array([eq1, eq2]), eq3
 
-    def f(ti, yyii, flag):
+    def f(ti, yyii):
         rhoi, Om1i = unpack_slice(yyii, Nt, Nrho, Nv, Nz)
-        rhok, Om1k = rhs(rhoi, Om1i, ti, params, flag)
+        rhok, Om1k = rhs(rhoi, Om1i, ti, params)
+        # We impose the boundary condition.
+        Om1k[0] = (Omega1_boundary[ii+1]-Omega1_boundary[ii])/dt
         kk = pack_slice(rhok, Om1k, Nt_sample, Nrho, Nv, Nz)
         return kk
 
@@ -401,51 +403,74 @@ def solve(params, plots=False, name="", integrate_velocities=False,
 
     yyii = pack_slice(rhoii, Om1ii, Nt_sample, Nrho, Nv, Nz)
 
-    warnings.filterwarnings("error")
+    # warnings.filterwarnings("error")
 
     solver = ode(f)
-    solver.set_integrator('lsoda', method='bdf')
+    # rk4  19.73
+
+    # solver.set_integrator('lsoda', method='bdf')  # 10 min
+    # solver.set_integrator('dopri5')  # 6.57 s
+    # solver.set_integrator('dop853')  # 7.7936398983 s.
+    solver.set_integrator('vode', method='bdf')  # 0.165 s
     solver.set_initial_value(yyii, ti)
-    # while solver.successful() and solver.t < t[-2]:
+
+    Omega1_boundary = Omega1_peak*np.exp(-4*np.log(2.0) *
+                                         (t_sample - t0s + D/2/c)**2/tau1**2)
     ii = 0
-
-    for ii in range(Nt-1):
-        k1 = f(ti, yyii, 1)
-        k2 = f(ti+dt*0.5, yyii+k1*dt*0.5, 2)
-        k3 = f(ti+dt*0.5, yyii+k2*dt*0.5, 3)
-        k4 = f(ti+dt, yyii+k3*dt, 4)
-        # The solution at time ti + dt:
-        rhok1, Om1k1 = unpack_slice(k1, Nt, Nrho, Nv, Nz)
-        rhok2, Om1k2 = unpack_slice(k2, Nt, Nrho, Nv, Nz)
-        rhok3, Om1k3 = unpack_slice(k3, Nt, Nrho, Nv, Nz)
-        rhok4, Om1k4 = unpack_slice(k4, Nt, Nrho, Nv, Nz)
-
-        ti = ti + dt
-        rhoii = rhoii + (rhok1+2*rhok2+2*rhok3+rhok4)*dt/6.0
-        Om1ii = Om1ii + (Om1k1+2*Om1k2+2*Om1k3+Om1k4)*dt/6.0
-
+    dt = t_sample[1]-t_sample[0]
+    while solver.successful() and ii < Nt_sample-1:
+        # We advance
+        solver.integrate(solver.t+dt, step=1)
+        yyii = solver.y
+        rhoii, Om1ii = unpack_slice(yyii, Nt, Nrho, Nv, Nz)
+        # print ii, Nt_sample, float(ii)/Nt_sample*100, solver.t*1e9,
+        # print Om1ii[: 2]
         # We impose the boundary condition.
-        Om1ii[0] = Omega1_boundary[ii+1]
-        yyii = pack_slice(rhoii, Om1ii, Nt_sample, Nrho, Nv, Nz)
+        # Om1ii[0] = Omega1_boundary[ii+1]
+        # yyii = pack_slice(rhoii, Om1ii, Nt_sample, Nrho, Nv, Nz)
 
-        # We determine the index for the sampling.
-        if keep_data == "all":
-            sampling_index = ii+1
-        if keep_data == "sample":
-            if ii % sampling_rate == 0:
-                sampling_index = ii/sampling_rate
+        ii += 1
+        solver.t+dt
+        rho[ii] = rhoii
+        Om1[ii] = Om1ii
 
-        rho[sampling_index] = rhoii
-        Om1[sampling_index] = Om1ii
-
-        # Om1 = np.zeros((Nt, Nz), complex)
-        # rho = np.zeros((Nt, Nrho, Nv, Nz), complex)
-        if verbose >= 1:
-            if ii == 0:
-                print "  0.0 % done..."
-            elif ii % (Nt/10) == 0:
-                print ' '+str(100.0*ii/Nt) + " % done..."
-            if ii == Nt-2: print "100.0 % done."
+    # for ii in range(Nt-1):
+    #     k1 = f(ti, yyii)
+    #     k2 = f(ti+dt*0.5, yyii+k1*dt*0.5)
+    #     k3 = f(ti+dt*0.5, yyii+k2*dt*0.5)
+    #     k4 = f(ti+dt, yyii+k3*dt)
+    #     # The solution at time ti + dt:
+    #     rhok1, Om1k1 = unpack_slice(k1, Nt, Nrho, Nv, Nz)
+    #     rhok2, Om1k2 = unpack_slice(k2, Nt, Nrho, Nv, Nz)
+    #     rhok3, Om1k3 = unpack_slice(k3, Nt, Nrho, Nv, Nz)
+    #     rhok4, Om1k4 = unpack_slice(k4, Nt, Nrho, Nv, Nz)
+    #
+    #     ti = ti + dt
+    #     rhoii = rhoii + (rhok1+2*rhok2+2*rhok3+rhok4)*dt/6.0
+    #     Om1ii = Om1ii + (Om1k1+2*Om1k2+2*Om1k3+Om1k4)*dt/6.0
+    #
+    #     # We impose the boundary condition.
+    #     # Om1ii[0] = Omega1_boundary[ii+1]
+    #     yyii = pack_slice(rhoii, Om1ii, Nt_sample, Nrho, Nv, Nz)
+    #
+    #     # We determine the index for the sampling.
+    #     if keep_data == "all":
+    #         sampling_index = ii+1
+    #     if keep_data == "sample":
+    #         if ii % sampling_rate == 0:
+    #             sampling_index = ii/sampling_rate
+    #
+    #     rho[sampling_index] = rhoii
+    #     Om1[sampling_index] = Om1ii
+    #
+    #     # Om1 = np.zeros((Nt, Nz), complex)
+    #     # rho = np.zeros((Nt, Nrho, Nv, Nz), complex)
+    #     if verbose >= 1:
+    #         if ii == 0:
+    #             print "  0.0 % done..."
+    #         elif ii % (Nt/10) == 0:
+    #             print ' '+str(100.0*ii/Nt) + " % done..."
+    #         if ii == Nt-2: print "100.0 % done."
 
     # We plot the solution.
     if plots:
