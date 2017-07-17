@@ -28,12 +28,45 @@ from misc import efficiencies, vapour_number_density
 from misc import Omega2_HG, Omega1_initial_HG, Omega1_boundary_HG
 from scipy.constants import physical_constants
 from scipy.linalg import svd
+from scipy.integrate import complex_ode as ode
 import warnings
 
 a0 = physical_constants["Bohr radius"][0]
 # We set matplotlib to use a nice latex font.
 rcParams['mathtext.fontset'] = 'cm'
 rcParams['mathtext.rm'] = 'serif'
+
+
+def unpack_sol(yy, Nt, Nrho, Nv, Nz):
+    r"""Unpack a solution yy into meaningful variable names."""
+    Om1 = yy[:, 0, :]
+    rho = yy[:, 1:, :].reshape((Nt, Nrho, Nv, Nz))
+    return rho, Om1
+
+
+def pack_sol(rho, Om1, Nt, Nrho, Nv, Nz):
+    r"""Pack solutions rho21, rho31, Om1 into an array yy."""
+    rho = rho.reshape((Nt, Nrho*Nv, Nz))
+    yy = np.zeros((Nt, 1+Nrho*Nv, Nz), complex)
+    yy[:, 0, :] = Om1
+    yy[:, 1:, :] = rho
+    return yy
+
+
+def unpack_slice(yyii, Nt, Nrho, Nv, Nz):
+    r"""Unpack a time slice yyii into meaningful variable names."""
+    Om1i = yyii[0, :]
+    rhoi = yyii[1:, :].reshape((Nrho, Nv, Nz))
+    return rhoi, Om1i
+
+
+def pack_slice(rhoi, Om1i, Nt, Nrho, Nv, Nz):
+    r"""Pack slices rho21i, rho31i, Om1i into an array yyii."""
+    rhoi = rhoi.reshape((Nrho*Nv, Nz))
+    yyii = np.zeros((1+Nrho*Nv, Nz), complex)
+    yyii[0, :] = Om1i
+    yyii[1:, :] = rhoi
+    return yyii
 
 
 def solve(params, plots=False, name="", integrate_velocities=False,
@@ -174,15 +207,16 @@ def solve(params, plots=False, name="", integrate_velocities=False,
     if keep_data == "all":
         # t_sample = np.linspace(0, T, Nt)
         t_sample = t
-        Om1 = np.zeros((Nt, Nz), complex)
-        rho = np.zeros((Nt, Nrho, Nv, Nz), complex)
-        # output = np.zeros(Nt, complex)
+        Nt_sample = Nt
+        Om1 = np.zeros((Nt_sample, Nz), complex)
+        rho = np.zeros((Nt_sample, Nrho, Nv, Nz), complex)
+
     elif keep_data == "sample":
-        # t_sample = np.linspace(0, T, Nt/sampling_rate)
-        t_sample = np.linspace(0, T, Nt/sampling_rate)
-        Om1 = np.zeros((Nt/sampling_rate, Nz), complex)
-        rho = np.zeros((Nt/sampling_rate, Nrho, Nv, Nz), complex)
-        # output = np.zeros(Nt/sampling_rate, complex)
+        Nt_sample = Nt/sampling_rate
+        t_sample = np.linspace(0, T, Nt_sample)
+        Om1 = np.zeros((Nt_sample, Nz), complex)
+        rho = np.zeros((Nt_sample, Nrho, Nv, Nz), complex)
+
     elif keep_data == "current":
         # t_sample = np.zeros(1)
         Om1 = np.zeros((1, Nz), complex)
@@ -300,18 +334,6 @@ def solve(params, plots=False, name="", integrate_velocities=False,
               omega_laser1, omega_laser2)
 
     # We define the equations that the Runge-Kutta method will solve.
-    # from scipy.constants import physical_constants
-    # a0 = physical_constants["Bohr radius"][0]
-    # print g1
-    # print delta1/2/pi*1e-9, delta2/2/pi*1e-9
-    # print gamma21/2/pi*1e-6, gamma32/2/pi*1e-6
-    #
-    # print c/(omega_laser1/2/pi)*1e9
-    # print e_charge
-    #
-    # print r1/a0
-    # print hbar, epsilon_0, c
-
     def rhs(rhoi, Om1i, ti, params, flag=False):
         # We unpack the parameters.
         delta1, delta2, gamma21, gamma32, g1 = params[:5]
@@ -354,74 +376,57 @@ def solve(params, plots=False, name="", integrate_velocities=False,
             eq1[jj] = eq1j
             eq2[jj] = eq2j
 
-        # if flag:
-        #     ii = Nv/4
-        #     print 111, ii, vZ[ii], -1j*vZ[ii]*omega_laser1/c, eq1j[ii]
-
         # We calculate the right-hand side of equation 3 taking rho21 as
         # the average of all velocity groups weighted by the p_i's. In other
         # words we use here the density matrix of the complete velocity
         # ensemble.
         rho21i_tot = sum([p[jj]*rho21i[jj] for jj in range(Nv)])
-        # if flag:
-        #     print 222, ti, eq1j[-1], eq2j[-1]
-        #     print rho21i[0, 10], rho21i[-1, 10]
-        # print rho21i_tot-rho21i[Nv/2]
-        # print rho21i_tot
-        # if flag:
-        #     try:
-        #         eq3 = -1j*g1*n_atomic*rho21i_tot
-        #     except RuntimeWarning:
-        #         print 112
-        #         print g1
-        #         print n_atomic
-        #         print rho21i_tot
-        #         print ti, iii
+
         eq3 = -1j*g1*n_atomic*rho21i_tot
         eq3 += - cDz(Om1i, c, cheb_diff_mat)
 
-        # try:
-        #
-        # except RuntimeWarning:
-        #     print 222, ti, iii, flag
-        #     print rho21i_tot
-        # if flag:
-        #     print 222, ti, iii, flag
-        #     print rho21i_tot
-
         return np.array([eq1, eq2]), eq3
 
-    def f(ti, yyii):
-        rhoi = yyii[0]
-        Om1i = yyii[1]
-        rhok, Om1k = rhs(rhoi, Om1i, ti, params, flag=False)
-        return np.array([rhok, Om1k])
+    def f(ti, yyii, flag):
+        rhoi, Om1i = unpack_slice(yyii, Nt, Nrho, Nv, Nz)
+        rhok, Om1k = rhs(rhoi, Om1i, ti, params, flag)
+        kk = pack_slice(rhok, Om1k, Nt_sample, Nrho, Nv, Nz)
+        return kk
 
     ii = 0
     # We carry out the Runge-Kutta method.
     ti = 0.0
     rhoii = rho[0]
     Om1ii = Om1[0]
+
+    yyii = pack_slice(rhoii, Om1ii, Nt_sample, Nrho, Nv, Nz)
+
     warnings.filterwarnings("error")
+
+    solver = ode(f)
+    solver.set_integrator('lsoda', method='bdf')
+    # solver.set_initial_value(yyii, ti)
+    # while solver.successful() and solver.t < t[-2]:
+    ii = 0
+
     for ii in range(Nt-1):
-
-        yyii = np.array([rhoii, Om1ii])
-        k1 = f(ti, yyii)
-
-        k2 = f(ti+dt*0.5, yyii+k1*dt*0.5)
-
-        k3 = f(ti+dt*0.5, yyii+k2*dt*0.5)
-
-        k4 = f(ti+dt, yyii+k3*dt)
+        k1 = f(ti, yyii, 1)
+        k2 = f(ti+dt*0.5, yyii+k1*dt*0.5, 2)
+        k3 = f(ti+dt*0.5, yyii+k2*dt*0.5, 3)
+        k4 = f(ti+dt, yyii+k3*dt, 4)
         # The solution at time ti + dt:
-        rhok1 = k1[0]; Om1k1 = k1[1]
-        rhok2 = k2[0]; Om1k2 = k2[1]
-        rhok3 = k3[0]; Om1k3 = k3[1]
-        rhok4 = k4[0]; Om1k4 = k4[1]
+        rhok1, Om1k1 = unpack_slice(k1, Nt, Nrho, Nv, Nz)
+        rhok2, Om1k2 = unpack_slice(k2, Nt, Nrho, Nv, Nz)
+        rhok3, Om1k3 = unpack_slice(k3, Nt, Nrho, Nv, Nz)
+        rhok4, Om1k4 = unpack_slice(k4, Nt, Nrho, Nv, Nz)
 
         ti = ti + dt
         rhoii = rhoii + (rhok1+2*rhok2+2*rhok3+rhok4)*dt/6.0
         Om1ii = Om1ii + (Om1k1+2*Om1k2+2*Om1k3+Om1k4)*dt/6.0
+
+        # We impose the boundary condition.
+        Om1ii[0] = Omega1_boundary[ii+1]
+        yyii = pack_slice(rhoii, Om1ii, Nt_sample, Nrho, Nv, Nz)
 
         # We determine the index for the sampling.
         if keep_data == "all":
@@ -429,9 +434,6 @@ def solve(params, plots=False, name="", integrate_velocities=False,
         if keep_data == "sample":
             if ii % sampling_rate == 0:
                 sampling_index = ii/sampling_rate
-
-        # We impose the boundary condition.
-        Om1ii[0] = Omega1_boundary[ii+1]
 
         rho[sampling_index] = rhoii
         Om1[sampling_index] = Om1ii
