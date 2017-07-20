@@ -37,7 +37,7 @@ if __name__ == '__main__':
     print "The efficiencies function took", teff, "s."
     print "The efficiencies were:", eff_in, eff_out, eff
 
-    # Benchmark without plotting.
+    # # Benchmark without plotting.
     t0 = time()
     t, Z, vZ, rho, Om1 = orca.solve(params, plots=False, name=name)
     tsolve = time()-t0
@@ -46,6 +46,7 @@ if __name__ == '__main__':
                                         plots=False, name=name)
     teff = time()-t0
     nfun = 0
+    print
     print "Including plotting times:"
     print "The solve function took", tsolve, "s."
     print "The efficiencies function took", teff, "s."

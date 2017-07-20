@@ -29,6 +29,7 @@ from misc import Omega2_HG, Omega1_initial_HG, Omega1_boundary_HG
 from scipy.constants import physical_constants
 from scipy.linalg import svd
 from scipy.integrate import complex_ode as ode
+# from scipy.integrate import odeint
 # import warnings
 
 a0 = physical_constants["Bohr radius"][0]
@@ -397,6 +398,25 @@ def solve(params, plots=False, name="", integrate_velocities=False,
         kk = pack_slice(rhok, Om1k, Nt_sample, Nrho, Nv, Nz)
         return kk
 
+    # def complex2real(yyii):
+    #     Nvar = len(yyii)
+    #     xxii = np.zeros(2*Nvar)
+    #     xxii[:Nvar] = np.real(yyii)
+    #     xxii[Nvar:] = np.imag(yyii)
+    #     return xxii
+    #
+    # def real2complex(xxii):
+    #     Nvar = len(xxii)/2
+    #     yyii = np.zeros(Nvar, complex)
+    #     yyii = xxii[:Nvar]+1j*xxii[Nvar:]
+    #     return yyii
+    #
+    # def g(xxii, ti):
+    #     print "ti", ti*1e9
+    #     yyii = real2complex(xxii)
+    #     kk = f(ti, yyii)
+    #     return complex2real(kk)
+
     ii = 0
     # We carry out the Runge-Kutta method.
     ti = 0.0
@@ -409,31 +429,32 @@ def solve(params, plots=False, name="", integrate_velocities=False,
 
     solver = ode(f)
     # rk4  19.73
-
-    # solver.set_integrator('lsoda')  # 10 min
-    # solver.set_integrator('dopri5')  # 6.66 s
+    dt = t_sample[1]-t_sample[0]
+    # solver.set_integrator('lsoda', max_hnil=1000, ixpr=True)  # 10 min
+    solver.set_integrator('dopri5')  # 6.66 s
     # solver.set_integrator('dop853')  # 7.7936398983 s.
-    solver.set_integrator("vode", method='bdf')  # 6.64 s
+    # solver.set_integrator("vode", method='bdf')  # 6.64 s
     solver.set_initial_value(yyii, ti)
     Omega1_boundary2 = Omega1_peak *\
         np.exp(-4*np.log(2.0)*(t_sample - t0s + D/2/c)**2/tau1**2)
-    # plt.plot(t*1e9, Omega1_boundary)
-    # plt.plot(t_sample*1e9, Omega1_boundary2, "r+")
-    # plt.xlim([0, 1e-1])
-    # plt.ylim([0, 5000])
 
     Omega1_boundary = Omega1_boundary2
     ii = 0
-    dt = t_sample[1]-t_sample[0]
-    kkii = f(ti, yyii)
-    rhok1, Om1k1 = unpack_slice(kkii, Nt_sample, Nrho, Nv, Nz)
+    # kkii = f(ti, yyii)
+    # rhok1, Om1k1 = unpack_slice(kkii, Nt_sample, Nrho, Nv, Nz)
+
+    # xxii = complex2real(yyii)
+    # xx = odeint(g, xxii, t_sample)
+    # for ii in range(len(t_sample)):
+    #     rho[ii], Om1[ii] = unpack_slice(real2complex(xx[ii]),
+    #                                     Nt_sample, Nrho, Nv, Nz)
 
     while solver.successful() and ii < Nt_sample-1:
         # We advance
         solver.integrate(solver.t+dt)
         yyii = solver.y
         rhoii, Om1ii = unpack_slice(yyii, Nt, Nrho, Nv, Nz)
-        print ii, Nt_sample, float(ii)/Nt_sample*100, solver.t*1e9
+        # print ii, Nt_sample, float(ii)/Nt_sample*100, solver.t*1e9
         # print Om1ii[: 2]
         # We impose the boundary condition.
         # Om1ii[0] = Omega1_boundary[ii+1]
@@ -523,6 +544,7 @@ def efficiencies_t0wenergies(p, explicit_decoherence=None, name=""):
     t0r = default_params["t0r"]
 
     # We unpack the errors.
+    print "r1, r2:", r1/a0, r2/a0
     tmeet_error, energy_write, energy_read = p
     alpha_rw = np.sqrt(energy_read/energy_write)
 

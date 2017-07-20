@@ -252,9 +252,15 @@ def set_parameters_ladder(custom_parameters=None, fitted_couplings=True):
 
     cond1 = "r1" not in custom_parameters
     cond2 = "r2" not in custom_parameters
+    # if fitted_couplings and cond1 and cond2:
+    #     pms.update({"r1": pms["r1"]*0.23543177})
+    #     pms.update({"r2": pms["r2"]*0.81360687})
     if fitted_couplings and cond1 and cond2:
-        pms.update({"r1": pms["r1"]*0.23543177})
-        pms.update({"r2": pms["r2"]*0.81360687})
+        pms.update({"r1": pms["r1"]*0.2556521})
+        pms.update({"r2": pms["r2"]*0.72474758})
+    # if fitted_couplings and cond1 and cond2:
+    #     pms.update({"r1": pms["r1"]*0.2556521})
+    #     pms.update({"r2": pms["r2"]*0.63474758})
 
     pms["ns"] = 1
     pms["nw"] = 1
