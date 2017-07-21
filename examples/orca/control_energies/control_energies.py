@@ -118,11 +118,11 @@ def chi2(xx):
     # plt.plot(energies2*1e12, act_eff, "g--")
 
     # We plot the measured efficiencies.
-    plt.errorbar(energies*1e12, eff_in_meas, yerr=0.01,
+    plt.errorbar(energies*1e12, eff_in_meas, yerr=error_in,
                  fmt="ro", ms=3, capsize=2, label=r"$\eta_{\mathrm{in}}$")
     plt.errorbar(energies*1e12, eff_out_meas, yerr=error_out,
                  fmt="bo", ms=3, capsize=2, label=r"$\eta_{\mathrm{out}}$")
-    plt.errorbar(energies*1e12, eff_meas, yerr=0.01,
+    plt.errorbar(energies*1e12, eff_meas, yerr=error_tot,
                  fmt="ko", ms=3, capsize=2, label=r"$\eta_{\mathrm{tot}}$")
 
     # We plot the calculated efficiencies.
@@ -178,12 +178,17 @@ if __name__ == '__main__':
     eff_out_meas = eff_meas/eff_in_meas
 
     # We calculate the error bars for the readout efficiency.
+    error_in = []
     error_out = []
+    error_tot = []
     for i in range(len(eff_meas)):
-        dati = Measurement(eff_meas[i], 0.01)
-        dat_ini = Measurement(eff_in_meas[i], 0.01)
+        dati = Measurement(eff_meas[i], eff_in_meas[i]*0.01)
+        dat_ini = Measurement(eff_in_meas[i], eff_meas[i]*0.01)
         dat_outi = dati/dat_ini
+
+        error_in += [eff_in_meas[i]*0.01]
         error_out += [dat_outi.sigma]
+        error_tot += [eff_meas[i]*0.01]
 
     rep_rate = 160e6
     energies = powers/rep_rate*9/10.0
@@ -202,7 +207,8 @@ if __name__ == '__main__':
     x14 = [0.23380502, 0.81678002, -0.41974288]
     x14 = [0.23543177, 0.81360687, -0.420853]  # A nice one! 0.0201248140575
     x14 = [0.2556521, 0.72474758, -0.43663623]
-    # x14 = [0.2556521, 0.63474758, -0.43663623]
+    # Couplings that reproduce the sing-photon experiment.
+    x15 = [0.2556521, 0.63474758, -0.43663623]
 
     if optimize:
         print "Optimizing..."
@@ -227,52 +233,52 @@ if __name__ == '__main__':
 
     #########################################################################
     # We create a continuous plot.
-    # print
-    # print "Calculating a continuous plot..."
-    # energies_cont = np.linspace(0.0, 550e-12, 150)
-    # eff_in = np.zeros(len(energies_cont))
-    # eff_out = np.zeros(len(energies_cont))
-    # eff = np.zeros(len(energies_cont))
-    #
-    # # We create the parallel processes.
-    # pool = Pool(processes=Nprocs)
-    # # We calculate the efficiencies in parallel.
-    # procs = [pool.apply_async(efficiencies_r1r2t0w,
-    #                           [energies_cont[i], x14, explicit_decoherence])
-    #          for i in range(len(energies_cont))]
-    #
-    # # We get the results.
-    # aux = [procs[i].get() for i in range(len(energies_cont))]
-    # pool.close()
-    # pool.join()
-    #
-    # # We save the results with more convenient names.
-    # for i in range(len(energies_cont)):
-    #     eff_in[i], eff_out[i], eff[i] = aux[i]
-    #
-    # # We plot the measured efficiencies.
-    # plt.errorbar(energies*1e12, eff_in_meas, yerr=0.01,
-    #              fmt="ro", ms=3, capsize=2, label=r"$\eta_{\mathrm{in}}$")
-    # plt.errorbar(energies*1e12, eff_out_meas, yerr=error_out,
-    #              fmt="bo", ms=3, capsize=2, label=r"$\eta_{\mathrm{out}}$")
-    # plt.errorbar(energies*1e12, eff_meas, yerr=0.01,
-    #              fmt="ko", ms=3, capsize=2, label=r"$\eta_{\mathrm{tot}}$")
-    #
-    # # We plot the calculated efficiencies.
-    # plt.plot(energies_cont*1e12, eff_in, "r-")
-    # plt.plot(energies_cont*1e12, eff_out, "b-")
-    # plt.plot(energies_cont*1e12, eff, "k-")
-    #
-    # plt.ylim([-0.02, None])
-    # plt.xlim([energies_cont[0]*1e12, energies_cont[-1]*1e12])
-    #
-    # plt.xlabel(r"$E_c \ \mathrm{(pJ)}$", fontsize=20)
-    # plt.ylabel(r"$\mathrm{Efficiency}$", fontsize=20)
-    # plt.legend(fontsize=15, loc=2)
-    #
-    # plt.savefig("control_energies.png", bbox_inches="tight")
-    # plt.savefig("control_energies.pdf", bbox_inches="tight")
-    # plt.close("all")
+    print
+    print "Calculating a continuous plot..."
+    energies_cont = np.linspace(0.0, 550e-12, 150)
+    eff_in = np.zeros(len(energies_cont))
+    eff_out = np.zeros(len(energies_cont))
+    eff = np.zeros(len(energies_cont))
+
+    # We create the parallel processes.
+    pool = Pool(processes=Nprocs)
+    # We calculate the efficiencies in parallel.
+    procs = [pool.apply_async(efficiencies_r1r2t0w,
+                              [energies_cont[i], x14, explicit_decoherence])
+             for i in range(len(energies_cont))]
+
+    # We get the results.
+    aux = [procs[i].get() for i in range(len(energies_cont))]
+    pool.close()
+    pool.join()
+
+    # We save the results with more convenient names.
+    for i in range(len(energies_cont)):
+        eff_in[i], eff_out[i], eff[i] = aux[i]
+
+    # We plot the measured efficiencies.
+    plt.errorbar(energies*1e12, eff_in_meas, yerr=error_in,
+                 fmt="ro", ms=3, capsize=2, label=r"$\eta_{\mathrm{in}}$")
+    plt.errorbar(energies*1e12, eff_out_meas, yerr=error_out,
+                 fmt="bo", ms=3, capsize=2, label=r"$\eta_{\mathrm{out}}$")
+    plt.errorbar(energies*1e12, eff_meas, yerr=error_tot,
+                 fmt="ko", ms=3, capsize=2, label=r"$\eta_{\mathrm{tot}}$")
+
+    # We plot the calculated efficiencies.
+    plt.plot(energies_cont*1e12, eff_in, "r-")
+    plt.plot(energies_cont*1e12, eff_out, "b-")
+    plt.plot(energies_cont*1e12, eff, "k-")
+
+    plt.ylim([-0.02, None])
+    plt.xlim([energies_cont[0]*1e12, energies_cont[-1]*1e12])
+
+    plt.xlabel(r"$E_c \ \mathrm{(pJ)}$", fontsize=20)
+    plt.ylabel(r"$\mathrm{Efficiency}$", fontsize=20)
+    plt.legend(fontsize=15, loc=2)
+
+    plt.savefig("control_energies.png", bbox_inches="tight")
+    plt.savefig("control_energies.pdf", bbox_inches="tight")
+    plt.close("all")
 
     ##########################################################################
     # We use the fitted values to the efficiencies at
@@ -283,7 +289,7 @@ if __name__ == '__main__':
     eread = 970e-12  # Joules
 
     smin = -0.8; smax = -smin  # -0.19
-    sleft = -0.38; sright = -0.35
+    sleft = -0.30; sright = -0.27
     Ns = 8*4
     s = np.linspace(smin, smax, Ns)
 
@@ -376,5 +382,6 @@ if __name__ == '__main__':
     print "r1:", x14[0]*default_params["r1"]/a0, "Bohr radii"
     print "r2:", x14[1]*default_params["r2"]/a0, "Bohr radii"
     print "t0w - t0s:", (sleft+sright)/2.0, "ns"
-    print "overlap at:", (sleft+sright)*1e-9/2.0*c/2.0*1e2,
+    print "overlap at:", (sleft+sright)*1e-9/2.0/2.0*c/2.0*1e2,
     print "cm from the center of the cell."
+    print "overlap at:", tss/2.0*c/2.0*1e2

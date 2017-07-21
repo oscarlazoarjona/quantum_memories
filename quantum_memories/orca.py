@@ -457,7 +457,7 @@ def solve(params, plots=False, name="", integrate_velocities=False,
         # print ii, Nt_sample, float(ii)/Nt_sample*100, solver.t*1e9
         # print Om1ii[: 2]
         # We impose the boundary condition.
-        # Om1ii[0] = Omega1_boundary[ii+1]
+        Om1ii[0] = Omega1_boundary[ii+1]
         # yyii = pack_slice(rhoii, Om1ii, Nt_sample, Nrho, Nv, Nz)
 
         ii += 1
@@ -544,7 +544,7 @@ def efficiencies_t0wenergies(p, explicit_decoherence=None, name=""):
     t0r = default_params["t0r"]
 
     # We unpack the errors.
-    print "r1, r2:", r1/a0, r2/a0
+    # print "r1, r2:", r1/a0, r2/a0
     tmeet_error, energy_write, energy_read = p
     alpha_rw = np.sqrt(energy_read/energy_write)
 
