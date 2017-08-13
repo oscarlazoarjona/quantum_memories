@@ -6,7 +6,9 @@ various quantum memories, and calculations using them.
 For instance, the efficiencies in the ladder-type quantum memory described
 in [1] can be accurately calculated:
 
-[[https://github.com/oscarlazoarjona/quantum_memories/blob/master/examples/orca/control_energies/control_energies.png|alt=octocat]]
+![alt text](https://raw.githubusercontent.com/oscarlazoarjona/quantum_memories/master/examples/orca/control_energies/control_energies.png)
+
+[[https://raw.githubusercontent.com/oscarlazoarjona/quantum_memories/master/examples/orca/control_energies/control_energies.png|alt=octocat]]
 
 Installing
 --------
