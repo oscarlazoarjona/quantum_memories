@@ -320,7 +320,7 @@ def set_parameters_lambda(custom_parameters=None, fitted_couplings=True):
 
 
 def efficiencies(t, Om1, params, plots=False, name="",
-                 explicit_decoherence=1.0):
+                 explicit_decoherence=1.0, rabi=True):
     r"""Calculate the efficiencies for a given solution of the signal."""
     e_charge = params["e_charge"]
     hbar = params["hbar"]
@@ -335,7 +335,10 @@ def efficiencies(t, Om1, params, plots=False, name="",
     t_cutoff = params["t_cutoff"]
 
     # We calculate the number of photons.
-    const1 = np.pi*c*epsilon_0*hbar*(w1/e_charge/r1)**2/16.0/omega_laser1
+    if rabi:
+        const1 = np.pi*c*epsilon_0*hbar*(w1/e_charge/r1)**2/16.0/omega_laser1
+    else:
+        const1 = np.pi*c*epsilon_0*(w1)**2/16.0/hbar/omega_laser1
 
     dphotons_ini_dt = const1 * np.real(Om1[:, +0]*Om1[:, +0].conjugate())
     dphotons_out_dt = const1 * np.real(Om1[:, -1]*Om1[:, -1].conjugate())
