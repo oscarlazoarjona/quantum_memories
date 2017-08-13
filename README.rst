@@ -3,12 +3,14 @@ Quantum Memories
 This is a repository for solvers for the Maxwell-Bloch equations of
 various quantum memories, and calculations using them.
 
-For instance, the efficiencies in the ladder-type quantum memory described
-in [1] can be accurately calculated:
+For instance, the memory lifetime of the `ORCA
+<https://arxiv.org/abs/1704.00013/>`_. quantum memory can be accurately calculated:
 
-![alt text](https://raw.githubusercontent.com/oscarlazoarjona/quantum_memories/master/examples/orca/control_energies/control_energies.png)
+.. image:: https://raw.githubusercontent.com/oscarlazoarjona/quantum_memories/master/examples/hyperfine_orca/doppler_dephasing/doppler_dephasing.png
 
-[[https://raw.githubusercontent.com/oscarlazoarjona/quantum_memories/master/examples/orca/control_energies/control_energies.png|alt=octocat]]
+as well as the memory efficiencies for different control powers
+
+.. image:: https://raw.githubusercontent.com/oscarlazoarjona/quantum_memories/master/examples/orca/control_energies/control_energies.png
 
 Installing
 --------
@@ -47,8 +49,3 @@ and the Python scripts in the examples folder should run once the package
 is installed.
 
 Enjoy!
-
-References
-----------
-
-[1] https://arxiv.org/abs/1704.00013
