@@ -174,9 +174,9 @@ if __name__ == '__main__':
     # This set of parameters is both ORCA and feasible.
     # read-in efficiency: 0.8225
     # total efficiency:   0.5105
-    # x0 = [0.05373289, 2.26084362, 1.95388604, 38.19563015,
-    #       1.17706132, 1.33333333]
-    # t_cutoff = 2.7e-9
+    x0 = [0.05373289, 2.26084362, 1.95388604, 38.19563015,
+          1.17706132, 1.33333333]
+    t_cutoff = 2.7e-9
 
     # print_params(x0)
     if optimize:

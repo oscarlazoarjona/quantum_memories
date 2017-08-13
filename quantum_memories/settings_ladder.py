@@ -76,7 +76,6 @@ keep_data = "sample"
 # then the length of the output should be Nt/sampling_rate.
 sampling_rate = 50
 
-
 ################################################
 # The characteristics of the beams:
 
@@ -278,7 +277,8 @@ energy_phot2 = hbar*omega_laser2
 
 # The energies of the pulses.
 energy_pulse1 = 1*energy_phot1  # Joules.
-energy_pulse2 = 2.5e-11      # Joules.
+energy_pulse2 = 25e-12      # Joules.
+energy_pulse2 = 50e-12      # Joules.
 
 ################################################
 

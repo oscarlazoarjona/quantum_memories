@@ -9,7 +9,7 @@ default settings.
 
 from time import time
 
-from quantum_memories import orca
+from quantum_memories import hyperfine_orca
 from quantum_memories.misc import set_parameters_ladder, efficiencies
 import numpy as np
 
@@ -25,11 +25,12 @@ if __name__ == '__main__':
 
     # Benchmark with plotting.
     t0 = time()
-    t, Z, vZ, rho, Om1 = orca.solve(params, plots=True, name=name)
+    # hyperfine_orca.solve(params, plots=True, name=name)
+    t, Z, vZ, rho, E01 = hyperfine_orca.solve(params, plots=True, name=name)
     tsolve = time()-t0
     t0 = time()
-    eff_in, eff_out, eff = efficiencies(t, Om1, params,
-                                        plots=True, name=name)
+    eff_in, eff_out, eff = efficiencies(t, E01, params,
+                                        plots=True, name=name, rabi=False)
     teff = time()-t0
     nfun = 0
     print "Including plotting times:"
@@ -37,13 +38,13 @@ if __name__ == '__main__':
     print "The efficiencies function took", teff, "s."
     print "The efficiencies were:", eff_in, eff_out, eff
 
-    # # Benchmark without plotting.
+    # Benchmark without plotting.
     t0 = time()
-    t, Z, vZ, rho, Om1 = orca.solve(params, plots=False, name=name)
+    t, Z, vZ, rho, Om1 = hyperfine_orca.solve(params, plots=False, name=name)
     tsolve = time()-t0
     t0 = time()
     eff_in, eff_out, eff = efficiencies(t, Om1, params,
-                                        plots=False, name=name)
+                                        plots=False, name=name, rabi=False)
     teff = time()-t0
     nfun = 0
     print

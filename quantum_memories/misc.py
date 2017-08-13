@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # ***********************************************************************
 #       Copyright (C) 2016 - 2017 Oscar Gerardo Lazo Arjona             *
+#                            2017 Benjamin Brecht                       *
 #              <oscar.lazoarjona@physics.ox.ac.uk>                      *
 # ***********************************************************************
 
@@ -17,6 +18,115 @@ from matplotlib import pyplot as plt
 from colorsys import hls_to_rgb
 from settings_ladder import omega21, omega32
 from scipy.constants import k as k_B
+from scipy.special import hermite
+from scipy.misc import factorial
+
+
+def hg(n, x, x0, sigma):
+    """Generate normalized Hermite-Gauss mode.
+
+    That is,
+
+    .. math::
+        int |HG(x)|^2 dx = 1.
+
+    Note that for the purpose of this code, the mode is re-normalised
+    such that the 0th order mode (the fundamental Gaussian) has a
+    peak height of one. This renormalisation is necessary to conform
+    to the definitions in the quantum memories code.
+    """
+    X = (x - x0) / sigma
+    result = hermite(n)(X) * np.exp(-X**2 / 2) /\
+        sqrt(factorial(n) * sqrt(pi) * 2**n * sigma)
+    # In the next line, the renormalisation happens.
+    result *= sqrt(sqrt(pi) * sigma)
+    return result
+
+
+def Omega2_HG(Z, ti, sigma2w, sigma2r, Omega2, t0w, t0r,
+              alpha_rw, nw=0, nr=0, c=299792458):
+    r"""Calculate the control field distribution.
+    This function allows you to choose different energies, widths,
+    and temporal modes for write and read pulses, respectively.
+
+
+    Arguments:
+    Z -- position axis (numpy.ndarray)
+    ti -- current instant in time
+    sigma2w -- spectral intensity FWHM of the write pulse
+    sigma2r -- spectral intensity FWHM of the read pulse
+    Omega2 -- peak Rabi frequency of the write pulse
+    t0w -- temporal offset of the write pulse
+    t0r -- temporal offset of the read pulse
+    alpha_rw -- scaling between write and read pulse
+
+
+    Keyword Arguments:
+    nw -- temporal mode order of the write pulse (default: 0)
+    nr -- temporal mode order of the read pulse (default: 0)
+    c -- speed of light (default: 299792458 m/s)
+
+
+    Return:
+    ctrl -- numpy.ndarray containing the complex control field
+    """
+    tauw = sqrt(log(2)) / (pi * sigma2w)  # width of write pulse
+    taur = sqrt(log(2)) / (pi * sigma2r)  # width of read pulse
+    # Calculate the write pulse
+    ctrl_w = Omega2 * hg(nw, t0w - Z / c, ti, tauw)
+    # Calculate the read pulse
+    ctrl_r = Omega2 * hg(nr, t0r - Z / c, ti, taur)
+    ctrl = ctrl_w + alpha_rw * ctrl_r
+    return ctrl
+
+
+def Omega1_boundary_HG(t, sigma1, Omega1, t0s, D, ns=0, c=299792458):
+    r"""Calculate the boundary conditions for the signal field.
+
+
+    Arguments:
+    t -- time axis (numpy.ndarray).
+    sigma1 -- spectral intensity FWHM of the signal pulse.
+    Omega1 -- peak Rabi frequency of the signal pulse.
+    t0s -- temporal offset of the signal pulse.
+    D -- spatial extent of the calculation.
+
+
+    Keyword Arguments:
+    ns -- temporal mode order of the signal pulse (default: 0)
+    c -- speed of light (default: 299792458 m/s)
+
+
+    Return:
+    sig_bound -- numpy.ndarray containing the complex signal
+    """
+    tau = sqrt(log(2)) / (pi * sigma1)
+    sig_bound = Omega1 * hg(ns, t, t0s - D / 2 / c, tau)
+    return sig_bound
+
+
+def Omega1_initial_HG(Z, sigma1, Omega1, t0s, ns=0, c=299792458):
+    r"""Calculate the initial signal field.
+
+
+    Arguments:
+    Z -- space axis (numpy.ndarray)
+    sigma1 -- spectral intensity FWHM of the signal pulse
+    Omega1 -- peak Rabi frequency of the signal pulse
+    t0s -- temporal offset of the signal pulse
+
+
+    Keyword Arguments:
+    ns -- temporal mode order of the signal pulse (default: 0)
+    c -- speed of light (default: 299792458 m/s)
+
+
+    Return:
+    sig_init -- numpy.ndarray containing the complex initial signal
+    """
+    tau = sqrt(log(2)) / (pi * sigma1)
+    sig_init = Omega1 * hg(ns, -t0s, Z / c, tau)
+    return sig_init
 
 
 def simple_complex_plot(x, y, f, name, amount="", modsquare=False):
@@ -142,9 +252,21 @@ def set_parameters_ladder(custom_parameters=None, fitted_couplings=True):
 
     cond1 = "r1" not in custom_parameters
     cond2 = "r2" not in custom_parameters
+    # if fitted_couplings and cond1 and cond2:
+    #     pms.update({"r1": pms["r1"]*0.23543177})
+    #     pms.update({"r2": pms["r2"]*0.81360687})
     if fitted_couplings and cond1 and cond2:
-        pms.update({"r1": pms["r1"]*0.23543177})
-        pms.update({"r2": pms["r2"]*0.81360687})
+        pms.update({"r1": pms["r1"]*0.2556521})
+        pms.update({"r2": pms["r2"]*0.72474758})
+    # if fitted_couplings and cond1 and cond2:
+    #     pms.update({"r1": pms["r1"]*0.2556521})
+    #     pms.update({"r2": pms["r2"]*0.63474758})
+
+    pms["ns"] = 1
+    pms["nw"] = 1
+    pms["nr"] = 1
+    pms["USE_HG_CTRL"] = False
+    pms["USE_HG_SIG"] = False
 
     return pms
 
@@ -198,7 +320,7 @@ def set_parameters_lambda(custom_parameters=None, fitted_couplings=True):
 
 
 def efficiencies(t, Om1, params, plots=False, name="",
-                 explicit_decoherence=1.0):
+                 explicit_decoherence=1.0, rabi=True):
     r"""Calculate the efficiencies for a given solution of the signal."""
     e_charge = params["e_charge"]
     hbar = params["hbar"]
@@ -213,10 +335,20 @@ def efficiencies(t, Om1, params, plots=False, name="",
     t_cutoff = params["t_cutoff"]
 
     # We calculate the number of photons.
-    const1 = np.pi*c*epsilon_0*hbar*(w1/e_charge/r1)**2/16.0/omega_laser1
+    if rabi:
+        const1 = np.pi*c*epsilon_0*hbar*(w1/e_charge/r1)**2/16.0/omega_laser1
+    else:
+        const1 = np.pi*c*epsilon_0*(w1)**2/16.0/hbar/omega_laser1
 
     dphotons_ini_dt = const1 * np.real(Om1[:, +0]*Om1[:, +0].conjugate())
     dphotons_out_dt = const1 * np.real(Om1[:, -1]*Om1[:, -1].conjugate())
+
+    dphase_ini = np.unwrap(np.angle(Om1[:, +0]))
+    # dphase_out = np.angle(Om1[:, -1])
+    # dphase_tra = np.array([dphase_out[i] for i in range(Nt)
+    #                        if t[i] < t_cutoff])
+    # dphase_ret = np.array([dphase_out[i] for i in range(Nt)
+    #                        if t[i] > t_cutoff])
 
     dt = t[1]-t[0]
 
@@ -232,15 +364,23 @@ def efficiencies(t, Om1, params, plots=False, name="",
     dphotons_out_dt_re = np.array(dphotons_out_dt_re)*explicit_decoherence
 
     if plots:
-        plt.plot(t*Omega*1e9, dphotons_ini_dt/Omega*1e-9, "g-",
+        fig, ax1 = plt.subplots()
+        ax1.plot(t*Omega*1e9, dphotons_ini_dt/Omega*1e-9, "g-",
                  label=r"$\mathrm{Signal} \ @ \ z=-D/2$")
-        plt.plot(t_tr*Omega*1e9, dphotons_out_dt_tr/Omega*1e-9, "r-",
+        ax1.plot(t_tr*Omega*1e9, dphotons_out_dt_tr/Omega*1e-9, "r-",
                  label=r"$\mathrm{Signal} \ @ \ z=+D/2$")
-        plt.plot(t_re*Omega*1e9, dphotons_out_dt_re/Omega*1e-9, "b-",
+        ax1.plot(t_re*Omega*1e9, dphotons_out_dt_re/Omega*1e-9, "b-",
                  label=r"$\mathrm{Signal} \ @ \ z=+D/2$")
-        plt.xlabel(r"$ t \ (\mathrm{ns})$", fontsize=20)
-        plt.ylabel(r"$ \mathrm{photons/ns}$", fontsize=20)
+        ax1.set_xlabel(r"$ t \ (\mathrm{ns})$", fontsize=20)
+        ax1.set_ylabel(r"$ \mathrm{photons/ns}$", fontsize=20)
         plt.legend(fontsize=15)
+
+        ax2 = ax1.twinx()
+        ax2.plot(t*Omega*1e9, dphase_ini*180/np.pi, "g:")
+        # ax2.plot(t_tr*Omega*1e9, dphase_tra*180/np.pi, "r:")
+        # ax2.plot(t_re*Omega*1e9, dphase_ret*180/np.pi, "b:")
+        ax2.set_ylabel(r"$ \mathrm{Phase \ (degrees)}$", fontsize=20)
+
         plt.savefig(name+"_inout.png", bbox_inches="tight")
         plt.close("all")
 
