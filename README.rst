@@ -3,6 +3,11 @@ Quantum Memories
 This is a repository for solvers for the Maxwell-Bloch equations of
 various quantum memories, and calculations using them.
 
+For instance, the efficiencies in the ladder-type quantum memory described
+in [1] can be accurately calculated:
+
+[[https://github.com/oscarlazoarjona/quantum_memories/blob/master/examples/orca/control_energies/control_energies.png|alt=octocat]]
+
 Installing
 --------
 This software requires pip and git to be installed. These can be installed as
@@ -30,7 +35,7 @@ To uninstall use
     $ pip uninstall quantum_memories
 
 Using Quantum Memories
---------
+----------------------
 
 The source code can be downloaded from
 
@@ -40,3 +45,8 @@ and the Python scripts in the examples folder should run once the package
 is installed.
 
 Enjoy!
+
+References
+----------
+
+[1] https://arxiv.org/abs/1704.00013
