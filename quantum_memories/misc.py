@@ -391,15 +391,15 @@ def efficiencies(t, Om1, params, plots=False, name="",
 
     # We integrate using the trapezium rule.
     Nin = sum(dphotons_ini_dt[1:-1])
-    Nin += (dphotons_ini_dt[1] + dphotons_ini_dt[-1])*0.5
+    Nin += (dphotons_ini_dt[0] + dphotons_ini_dt[-1])*0.5
     Nin = Nin*dt
 
     Ntr = sum(dphotons_out_dt_tr[1:-1])
-    Ntr += (dphotons_out_dt_tr[1] + dphotons_out_dt_tr[-1])*0.5
+    Ntr += (dphotons_out_dt_tr[0] + dphotons_out_dt_tr[-1])*0.5
     Ntr = Ntr*dt
 
     Nre = sum(dphotons_out_dt_re[1:-1])
-    Nre += (dphotons_out_dt_re[1] + dphotons_out_dt_re[-1])*0.5
+    Nre += (dphotons_out_dt_re[0] + dphotons_out_dt_re[-1])*0.5
     Nre = Nre*dt
 
     eff_in = (Nin-Ntr)/Nin
