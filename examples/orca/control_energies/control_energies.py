@@ -20,11 +20,7 @@ from time import time
 from quantum_memories.misc import set_parameters_ladder, Measurement
 from quantum_memories.orca import efficiencies_r1r2t0w
 from quantum_memories.orca import efficiencies_t0wenergies
-<<<<<<< HEAD
 import pandas as pd
-=======
-# from quantum_memories.orca import optimize_signal
->>>>>>> stiffness
 # from quantum_memories.settings_ladder import optimize
 
 
@@ -182,7 +178,6 @@ if __name__ == '__main__':
     eff_out_meas = eff_meas/eff_in_meas
 
     # We calculate the error bars for the readout efficiency.
-<<<<<<< HEAD
     error_tot = []; error_in = []; error_out = []
     for i in range(len(eff_meas)):
         dati = Measurement(eff_meas[i], 0.01*eff_meas[i])
@@ -190,7 +185,6 @@ if __name__ == '__main__':
         dat_outi = dati/dat_ini
         error_tot += [dati.sigma]
         error_in += [dat_ini.sigma]
-=======
     error_in = []
     error_out = []
     error_tot = []
@@ -200,7 +194,6 @@ if __name__ == '__main__':
         dat_outi = dati/dat_ini
 
         error_in += [eff_in_meas[i]*0.01]
->>>>>>> stiffness
         error_out += [dat_outi.sigma]
         error_tot += [eff_meas[i]*0.01]
 
@@ -220,13 +213,10 @@ if __name__ == '__main__':
     # x14 = [0.23382219, 0.81674232, -0.41974531]
     x14 = [0.23380502, 0.81678002, -0.41974288]
     x14 = [0.23543177, 0.81360687, -0.420853]  # A nice one! 0.0201248140575
-<<<<<<< HEAD
     x14 = [0.25647587, 0.72259249, -0.43641079]
-=======
     x14 = [0.2556521, 0.72474758, -0.43663623]
     # Couplings that reproduce the sing-photon experiment.
     x15 = [0.2556521, 0.63474758, -0.43663623]
->>>>>>> stiffness
 
     if optimize:
         print "Optimizing..."
@@ -298,13 +288,13 @@ if __name__ == '__main__':
 
     exp_data = pd.DataFrame(exp_data)
     fitted_data = pd.DataFrame(fitted_data)
-    exp_data.to_csv("file_path.csv", header=["energies",
-                                             "eff_in",
-                                             "eff_out",
-                                             "eff_tot",
-                                             "error_int",
-                                             "error_out",
-                                             "error_tot"])
+    exp_data.to_csv("experimental_data.csv", header=["energies",
+                                                     "eff_in",
+                                                     "eff_out",
+                                                     "eff_tot",
+                                                     "error_int",
+                                                     "error_out",
+                                                     "error_tot"])
     fitted_data.to_csv("fitted_data.csv", header=["energies",
                                                   "eff_in",
                                                   "eff_out",
