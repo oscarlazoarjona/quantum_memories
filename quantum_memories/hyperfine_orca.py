@@ -100,8 +100,8 @@ def solve(params, plots=False, name="", integrate_velocities=False,
         mass = params["mass"]
         Temperature = params["Temperature"]
         Nsigma = params["Nsigma"]
-        # gamma21 = params["gamma21"]
-        # gamma32 = params["gamma32"]
+        gamma21 = params["gamma21"]
+        gamma32 = params["gamma32"]
         # omega21 = params["omega21"]
         # omega32 = params["omega32"]
         r1 = params["r1"]
@@ -122,6 +122,10 @@ def solve(params, plots=False, name="", integrate_velocities=False,
         t0r = params["t0r"]
         alpha_rw = params["alpha_rw"]
         verbose = params["verbose"]
+
+        if element == "Cs" and isotope == 133:
+            # The decay rate from Safronova's reduced matrix elments.
+            gamma32 = 2*pi*2.6149401689*1e6
 
         # We establish the hyperfine structure constants.
         r_1_3_1 = 1.11803398874989*r1
@@ -144,41 +148,69 @@ def solve(params, plots=False, name="", integrate_velocities=False,
         r_2_11_4 = 0.577350269189626*r2
         r_2_12_3 = 0.707106781186548*r2
 
-        gamma_3_1 = 32886191.8978
-        gamma_4_1 = 24664643.9233
-        gamma_4_2 = 8221547.97444
-        gamma_5_1 = 13702579.9574
-        gamma_5_2 = 19183611.9404
-        gamma_6_2 = 32886191.8978
+        gamma_3_1 = 1.0*gamma21
+        gamma_4_1 = 0.75*gamma21
+        gamma_4_2 = 0.25*gamma21
+        gamma_5_1 = 0.416666666667*gamma21
+        gamma_5_2 = 0.583333333333*gamma21
+        gamma_6_2 = 1.0*gamma21
 
-        gamma_7_6 = 14878582.8074
-        gamma_8_5 = 10712579.6213
-        gamma_8_6 = 4166003.18607
-        gamma_9_4 = 6819350.45339
-        gamma_9_5 = 7364898.48966
-        gamma_9_6 = 694333.864345
-        gamma_10_3 = 3188267.74444
-        gamma_10_4 = 9299114.25463
-        gamma_10_5 = 2391200.80833
-        gamma_11_3 = 8927149.68444
-        gamma_11_4 = 5951433.12296
-        gamma_12_3 = 14878582.8074
+        gamma_7_6 = 1.0*gamma32
+        gamma_8_5 = 0.72*gamma32
+        gamma_8_6 = 0.28*gamma32
+        gamma_9_4 = 0.458333333333*gamma32
+        gamma_9_5 = 0.495*gamma32
+        gamma_9_6 = 0.0466666666667*gamma32
+        gamma_10_3 = 0.214285714286*gamma32
+        gamma_10_4 = 0.625*gamma32
+        gamma_10_5 = 0.160714285714*gamma32
+        gamma_11_3 = 0.6*gamma32
+        gamma_11_4 = 0.4*gamma32
+        gamma_12_3 = 1.0*gamma32
 
-        omega_1 = 0.0
-        omega_2 = 57759008871.6
-        omega_3 = 2.20998822144e+15
-        omega_4 = 2.20998917161e+15
-        omega_5 = 2.20999043634e+15
-        omega_6 = 2.20999201399e+15
-        omega_7 = 4.26305337164e+15
-        omega_8 = 4.26305354441e+15
-        omega_9 = 4.26305369061e+15
-        omega_10 = 4.26305380902e+15
-        omega_11 = 4.26305389868e+15
-        omega_12 = 4.26305395885e+15
+        if element == "Rb" and isotope == 85:
+            omega_1 = 0.0
+            omega_2 = 19074074839.2
+            omega_3 = 2.41420092267e+15
+            omega_4 = 2.41420110658e+15
+            omega_5 = 2.414201505e+15
+            omega_6 = 2.41420226503e+15
+            omega_7 = 4.84165447401e+15
+            omega_8 = 4.84165453274e+15
+            omega_9 = 4.84165458882e+15
+            omega_10 = 4.84165463619e+15
+            omega_11 = 4.84165467029e+15
+            omega_12 = 4.8416546881e+15
+        if element == "Rb" and isotope == 87:
+            omega_1 = 0.0
+            omega_2 = 42943577360.1
+            omega_3 = 2.41421544943e+15
+            omega_4 = 2.41421590321e+15
+            omega_5 = 2.41421688929e+15
+            omega_6 = 2.41421856472e+15
+            omega_7 = 4.84167009525e+15
+            omega_8 = 4.84167027636e+15
+            omega_9 = 4.84167042059e+15
+            omega_10 = 4.84167052073e+15
+            omega_11 = 4.84167052073e+15
+            omega_12 = 4.84167052073e+15
+
+        if element == "Cs" and isotope == 133:
+            omega_1 = 0.0
+            omega_2 = 57759008871.6
+            omega_3 = 2.20998822144e+15
+            omega_4 = 2.20998917161e+15
+            omega_5 = 2.20999043634e+15
+            omega_6 = 2.20999201399e+15
+            omega_7 = 4.26305337164e+15
+            omega_8 = 4.26305354441e+15
+            omega_9 = 4.26305369061e+15
+            omega_10 = 4.26305380902e+15
+            omega_11 = 4.26305389868e+15
+            omega_12 = 4.26305395885e+15
+
         # Additions BB for Green's function calculations
         #
-
         ns = params["ns"]
         nw = params["nw"]
         nr = params["nr"]
