@@ -13,6 +13,8 @@ References:
 
 
 from math import pi, sqrt, log
+from scipy.constants import physical_constants, c, hbar, epsilon_0
+
 import numpy as np
 from matplotlib import pyplot as plt
 from colorsys import hls_to_rgb
@@ -213,36 +215,361 @@ def set_parameters_ladder(custom_parameters=None, fitted_couplings=True):
     Only completely independent parameters are taken from settings.py.
     The rest are derived from them.
     """
-    if custom_parameters is None:
-        custom_parameters = {}
-    pm_names = ["e_charge", "hbar", "c", "epsilon_0", "kB",
-                "Omega", "distance_unit", "element", "isotope",
-                "Nt", "Nz", "Nv", "Nrho", "T", "L", "sampling_rate",
-                "keep_data", "mass", "Temperature", "Nsigma",
-                "gamma21", "gamma32", "omega21", "omega21", "r1", "r2",
-                "delta1", "sigma_power1", "sigma_power2",
-                "w1", "w2", "energy_pulse1", "energy_pulse2",
-                "t0s", "t0w", "t0r", "alpha_rw", "t_cutoff", "verbose"]
-    pms = {}
+    #########################################################################
+    # We set the default values of independent parameters
+    if True:
+        # rewrite = True; rewrite = False
+        calculate_atom = False  # ; calculate_atom = True
+        # calculate_bloch = False  # ; calculate_bloch=True
+        # make_smoother = True  # ; make_smoother=False
+        # change_rep_rate = True  # ; change_rep_rate=False
+        # change_read_power = True  # ; change_read_power=False
+        ignore_lower_f = False; ignore_lower_f = True
+        # run_long = False; run_long = True
 
-    for i in custom_parameters:
-        if i not in pm_names:
-            raise ValueError(str(i)+" is not a valid parameter name.")
+        # optimize = True; optimize = False
+        verbose = 1
 
-    for name in pm_names:
-        if name in custom_parameters:
-            pms.update({name: custom_parameters[name]})
+        # We choose the units we want.
+        units = "SI"  # ; units="fancy"
+        if verbose >= 2: print "We are using "+units+" units!"
+
+        a0 = physical_constants["Bohr radius"][0]
+        e_charge = physical_constants["elementary charge"][0]
+        kB = physical_constants["Boltzmann constant"][0]
+
+        # The extent of the simulation given by the number of dynamic variables
+        # Nrho, the number of time steps Nt, and the number of z points Nz.
+        Nrho = 2
+        Nt = 25500
+        Nz = 50
+
+        # The number of velocity groups to consider (better an odd number)
+        Nv = 9
+        # The number of standard deviations to consider on either side
+        # of the velocity distribution.
+        Nsigma = 4
+
+        # The data for the time discretization.
+        # The total time of the simulation (in s).
+        T = 8e-9
+        # T = 16e-9
+        # The time step.
+        # dt = T/(Nt-1)
+
+        # The data for the spacial discretization.
+        # Cell length (in m).
+        L = 0.072
+
+        # optical_depth = 0.05e5
+        # The simulation will be done spanning -D/2 <= z <= D/2
+        # zL = -0.5 * D  # left boundary of the simulation
+        # zR = +0.5 * D  # right boundary of the simulation
+
+        ######################
+        # The temperature of the cell.
+        Temperature = 90.0 + 273.15
+
+        # We should be able to choose whether to keep all of data, to
+        # just keep a sample at a certain rate, or to keep only the
+        # current-time data.
+
+        keep_data = "all"
+        keep_data = "sample"
+        # The sampling rate for the output. If sampling_rate=2 every
+        # second time step will be saved in memory and returned. If
+        # Nt is a multiple of sampling_rate then the length of the
+        # output should be Nt/sampling_rate.
+        sampling_rate = 50
+
+        ################################################
+        # The characteristics of the beams:
+
+        # The waists of the beams (in m):
+        w1 = 280e-6
+        w2 = 320e-6
+
+        # The full widths at half maximum of the gaussian envelope of
+        # the powers spectra (in Hz).
+        sigma_power1 = 1.0e9
+        sigma_power2 = 1.0e9
+
+        sigma_power1 = 0.807222536902e9
+        # sigma_power1 = 1.0e9
+        sigma_power2 = 0.883494520871e9
+
+        # We calculate the duration of the pulses from the standard deviations
+        # tau1 = 2/pi * sqrt(log(2.0))/sigma_power1
+        # tau2 = 2/pi * sqrt(log(2.0))/sigma_power2
+
+        # tau1 = 2*sqrt(2)*log(2)/pi / sigma_power1
+        # tau2 = 2*sqrt(2)*log(2)/pi / sigma_power2
+
+        # The time of arrival of the beams
+        t0s = 1.1801245283489222e-09
+        t0w = t0s
+        t0r = t0w + 3.5e-9
+        alpha_rw = 1.0
+
+        # t_cutoff = t0r+D/2/c+tau1
+        t_cutoff = 3.0e-9
+
+        ######################
+        # The detuning of the signal field (in Hz):
+        delta1 = -2*pi*6e9
+        # The detuning of the control field (in Hz):
+        delta2 = -delta1
+        # This is the two-photon transition condition.
+    #########################################################################
+    if True:
+        # Atomic properties.
+        # We choose an atom:
+        element = "Rb"; isotope = 85; n_atom = 5
+        element = "Rb"; isotope = 87; n_atom = 5
+        element = "Cs"; isotope = 133; n_atom = 6
+
+        # We calculate (or impose) the properties of the atom:
+
+        # A decoherence frequency
+        # gammaB = 2*pi*15e6
+
+    ################################################
+    Omega = 1.0  # We choose the frequencies to be in radians/s.
+    distance_unit = 1.0
+
+    # The fancy units should be picked so that the factors multiplied in
+    # each of the terms of the equations are of similar magnitude.
+
+    # Ideally, the various terms should also be of similar magnitude, but
+    # changing the units will not change the relative importance of terms.
+    # Otherwise physics would change depending on the units!
+    # However, it should be possible to choose units such that the largest
+    # terms should be close to 1.
+
+    # We set the default values of the independent parameters.
+    pms = {"e_charge": e_charge,
+           "hbar": hbar,
+           "c": c,
+           "epsilon_0": epsilon_0,
+           "kB": kB,
+           "Omega": Omega,
+           "distance_unit": distance_unit,
+           "element": element,
+           "isotope": isotope,
+           "Nt": Nt,
+           "Nz": Nz,
+           "Nv": Nv,
+           "Nrho": Nrho,
+           "T": T,
+           "L": L,
+           "sampling_rate": sampling_rate,
+           "keep_data": keep_data,
+           "Temperature": Temperature,
+           "Nsigma": Nsigma,
+           "delta1": delta1,
+           "sigma_power1": sigma_power1,
+           "sigma_power2": sigma_power2,
+           "w1": w1,
+           "w2": w2,
+           "t0s": t0s,
+           "t0w": t0w,
+           "t0r": t0r,
+           "alpha_rw": alpha_rw,
+           "t_cutoff": t_cutoff,
+           "verbose": verbose}
+
+    #########################################################################
+    # We replace inpdependent parameters by custom ones if given.
+    if True:
+        if custom_parameters is None:
+            custom_parameters = {}
+
+        pm_names_ind = ["e_charge", "hbar", "c", "epsilon_0", "kB",
+                        "Omega", "distance_unit", "element", "isotope", "Nt",
+                        "Nz", "Nv", "Nrho", "T", "L", "sampling_rate",
+                        "keep_data", "Temperature", "Nsigma", "delta1",
+                        "sigma_power1", "sigma_power2", "w1", "w2",
+                        "t0s", "t0w", "t0r",
+                        "alpha_rw", "t_cutoff", "verbose"]
+
+        pm_names_dep = ["mass", "gamma21", "gamma32", "omega21", "omega32",
+                        "omega_laser1", "omega_laser2", "delta2", "r1", "r2",
+                        "energy_pulse1", "energy_pulse2",
+                        "ns", "nw", "nr",
+                        "USE_HG_CTRL", "USE_HG_SIG"]
+
+        for i in custom_parameters:
+            if (i not in pm_names_ind) and (i not in pm_names_dep):
+                raise ValueError(str(i)+" is not a valid parameter name.")
+
+        for name in pm_names_ind:
+            if name in custom_parameters:
+                pms.update({name: custom_parameters[name]})
+
+    #########################################################################
+    # We calculate dependent parameters
+    if calculate_atom:
+        from fast import State, Transition, make_list_of_states
+        from fast import calculate_boundaries, Integer
+        from fast import calculate_matrices
+        from fast import fancy_r_plot, fancy_matrix_plot
+        from fast import vapour_number_density
+        from matplotlib import pyplot
+
+        # atom = Atom(element, isotope)
+        n_atomic0 = vapour_number_density(Temperature, element)
+
+        g = State(element, isotope, n_atom, 0, 1/Integer(2))
+        e = State(element, isotope, n_atom, 1, 3/Integer(2))
+        l = State(element, isotope, n_atom, 2, 5/Integer(2))
+        fine_states = [g, e, l]
+
+        magnetic_states = make_list_of_states(fine_states,
+                                              "magnetic", verbose=0)
+
+        bounds = calculate_boundaries(fine_states, magnetic_states)
+
+        g_index = bounds[0][0][1]-1
+        e_index = bounds[0][1][1]-1
+        l_index = bounds[1][6][1]-1
+
+        g = magnetic_states[g_index]
+        e = magnetic_states[e_index]
+        l = magnetic_states[l_index]
+
+        if verbose >= 1:
+            print
+            print "Calculating atomic properties ..."
+            print "We are choosing the couplings of"
+            print magnetic_states[g_index], magnetic_states[e_index],
+            print magnetic_states[l_index]
+            print "as a basis to estimate the values of gamma_ij, r^l."
+
+        # We calculate the matrices for the given states.
+        Omega = 1.0  # We choose the frequencies to be in radians/s.
+        distance_unit = 1.0
+        omega, gamma, r = calculate_matrices(magnetic_states, Omega)
+
+        # We plot these matrices.
+        path = ''; name = element+str(isotope)
+        fig = pyplot.figure(); ax = fig.add_subplot(111)
+        fancy_matrix_plot(ax, omega, magnetic_states, path,
+                          name+'_omega.png',
+                          take_abs=True, colorbar=True)
+        fig = pyplot.figure(); ax = fig.add_subplot(111)
+        fancy_matrix_plot(ax, gamma, magnetic_states, path,
+                          name+'_gamma.png',
+                          take_abs=True, colorbar=True)
+        fig = pyplot.figure(); ax = fig.add_subplot(111)
+        fancy_r_plot(r, magnetic_states, path, name+'_r.png',
+                     complex_matrix=True)
+        pyplot.close("all")
+
+        # We get the parameters for the simplified scheme.
+        # The couplings.
+        r1 = r[2][e_index][g_index]
+        r2 = r[2][l_index][e_index]
+
+        # The FAST function calculate_matrices always returns r in
+        # Bohr radii, so we convert. By contrast, it returns omega
+        # and gamma in units scaled by Omega. If Omega=1e6 this means
+        # 10^6 rad/s. So we do not have to rescale omega or gamma.
+        r1 = r1*a0
+        r2 = r2*a0
+
+        # The decay frequencies.
+        gamma21 = gamma[e_index][g_index]
+        gamma32 = gamma[l_index][e_index]
+        # print gamma21, gamma32
+
+        # We determine which fraction of the population is in the lower
+        # and upper ground states. The populations will be approximately
+        # those of a thermal state. At room temperature the populations
+        # of all Zeeman states will be approximately equal.
+        fs = State(element, isotope, n_atom, 0, 1/Integer(2)).fperm
+        # lower_fraction = (2*fs[0]+1)/(2*fs[0]+1.0 + 2*fs[1]+1.0)
+        upper_fraction = (2*fs[1]+1)/(2*fs[0]+1.0 + 2*fs[1]+1.0)
+
+        if ignore_lower_f:
+            g_index = bounds[0][0][1]-1
+            e_index = bounds[1][3][1]-1
+
+            g = magnetic_states[g_index]
+            e = magnetic_states[e_index]
+            n_atomic0 = upper_fraction*n_atomic0
+
         else:
-            s = "from settings_ladder import "+name
-            exec(s)
-            s = "pms.update({'"+name+"':"+name+"})"
-            exec(s)
+            g_index = bounds[0][0][1]-1
+            e_index = bounds[0][1][1]-1
+            l_index = bounds[1][6][1]-1
+
+            g = magnetic_states[g_index]
+            e = magnetic_states[e_index]
+            l = magnetic_states[l_index]
+
+        omega21 = Transition(e, g).omega
+        omega32 = Transition(l, e).omega
+        # print omega21, omega32
+        # print r1, r2
+        # print n_atomic0
+        # print atom.mass
+    else:
+        if (element, isotope) == ("Rb", 85):
+            gamma21, gamma32 = (38107518.888, 3102649.47106)
+            if ignore_lower_f:
+                omega21, omega32 = (2.4141820325e+15, 2.42745336743e+15)
+            else:
+                omega21, omega32 = (2.41418319096e+15, 2.42745220897e+15)
+            r1, r2 = (2.23682340192e-10, 5.48219440757e-11)
+            mass = 1.40999341816e-25
+            if ignore_lower_f:
+                n_atomic0 = 1.8145590576e+18
+            else:
+                n_atomic0 = 3.11067267018e+18
+
+        elif (element, isotope) == ("Rb", 87):
+            gamma21, gamma32 = (38107518.888, 3102649.47106)
+            if ignore_lower_f:
+                omega21, omega32 = (2.41417295963e+15, 2.42745419204e+15)
+            else:
+                omega21, omega32 = (2.41417562114e+15, 2.42745153053e+15)
+            r1, r2 = (2.23682340192e-10, 5.48219440757e-11)
+            mass = 1.44316087206e-25
+            if ignore_lower_f:
+                n_atomic0 = 1.94417041886e+18
+            else:
+                n_atomic0 = 3.11067267018e+18
+
+        elif (element, isotope) == ("Cs", 133):
+            gamma21, gamma32 = (32886191.8978, 14878582.8074)
+            if ignore_lower_f:
+                omega21, omega32 = (2.20993141261e+15, 2.05306420003e+15)
+            else:
+                omega21, omega32 = (2.20993425498e+15, 2.05306135765e+15)
+            r1, r2 = (2.37254506627e-10, 1.54344650829e-10)
+            mass = 2.2069469161e-25
+            if ignore_lower_f:
+                n_atomic0 = 4.72335166533e+18
+            else:
+                n_atomic0 = 8.39706962725e+18
+
+    # The frequencies of the optical fields.
+    omega_laser1 = delta1 + omega21
+    omega_laser2 = delta2 + omega32
+
+    ######################
+    # The energies of the photons.
+    energy_phot1 = hbar*omega_laser1
+    # The energies of the pulses.
+    energy_pulse1 = 1*energy_phot1  # Joules.
+    energy_pulse2 = 50e-12      # Joules.
 
     delta1 = pms["delta1"]
     delta2 = -delta1
     omega_laser1 = delta1 + omega21
     omega_laser2 = delta2 + omega32
     pms.update({"omega_laser1": omega_laser1, "omega_laser2": omega_laser2})
+
     # We make a few checks
     if pms["Nv"] == 2:
         raise ValueError("Nv = 2 is a very bad choice.")
@@ -250,23 +577,37 @@ def set_parameters_ladder(custom_parameters=None, fitted_couplings=True):
     if pms["Nt"] % pms["sampling_rate"] != 0:
         raise ValueError("Nt must be a multiple of the sampling_rate.")
 
+    pms.update({"mass": mass,
+                "gamma21": gamma21,
+                "gamma32": gamma32,
+                "omega21": omega21,
+                "omega32": omega32,
+                "omega_laser1": omega_laser1,
+                "omega_laser2": omega_laser2,
+                "delta2": delta2,
+                "r1": r1,
+                "r2": r2,
+                "energy_pulse1": energy_pulse1,
+                "energy_pulse2": energy_pulse2,
+                "ns": 1,
+                "nw": 1,
+                "nr": 1,
+                "USE_HG_CTRL": False,
+                "USE_HG_SIG": False})
+
     cond1 = "r1" not in custom_parameters
     cond2 = "r2" not in custom_parameters
-    # if fitted_couplings and cond1 and cond2:
-    #     pms.update({"r1": pms["r1"]*0.23543177})
-    #     pms.update({"r2": pms["r2"]*0.81360687})
     if fitted_couplings and cond1 and cond2:
         pms.update({"r1": pms["r1"]*0.2556521})
         pms.update({"r2": pms["r2"]*0.72474758})
-    # if fitted_couplings and cond1 and cond2:
-    #     pms.update({"r1": pms["r1"]*0.2556521})
-    #     pms.update({"r2": pms["r2"]*0.63474758})
 
-    pms["ns"] = 1
-    pms["nw"] = 1
-    pms["nr"] = 1
-    pms["USE_HG_CTRL"] = False
-    pms["USE_HG_SIG"] = False
+    # We force any custom dependent parameters.
+    for name in pm_names_dep:
+        if name in custom_parameters:
+            if pms["verbose"] >= 1:
+                print "WARNING: parameter", name,
+                print "may be inconsistent with independent parameters."
+            pms.update({name: custom_parameters[name]})
 
     return pms
 
