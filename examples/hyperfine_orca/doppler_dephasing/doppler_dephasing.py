@@ -14,6 +14,7 @@ from scipy.optimize import minimize
 
 from quantum_memories import hyperfine_orca, orca
 from quantum_memories.misc import set_parameters_ladder, efficiencies
+import pandas as pd
 
 
 def model_theoretical(t, amp, sigma):
@@ -234,7 +235,21 @@ if __name__ == '__main__':
     plt.legend()
 
     plt.savefig("doppler_dephasing.png", bbox_inches="tight")
+    plt.savefig("doppler_dephasing.pdf", bbox_inches="tight")
     plt.close("all")
+
+    # We save the data.
+    models = np.asarray([tdelay, eta_the_sim_norm, eta_the_hyp_norm]).T
+    models = pd.DataFrame(models)
+    experimental_data = np.asarray([tdelay_exp, eta_exp_norm]).T
+    experimental_data = pd.DataFrame(experimental_data)
+
+    models.to_csv("eta_theory.csv", header=["tdelay",
+                                            "etan_simple",
+                                            "etan_hyperfine"])
+
+    experimental_data.to_csv("eta_experiment.csv", header=["tdelay_exp",
+                                                           "etan_exp"])
 
     ###########################################################################
     # We now repeat exactly the same thing using different number of velocity
