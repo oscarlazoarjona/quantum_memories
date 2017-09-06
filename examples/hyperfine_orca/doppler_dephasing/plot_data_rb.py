@@ -4,7 +4,7 @@
 r"""This is a template."""
 import numpy as np
 from scipy.optimize import curve_fit
-# import pandas as pd
+import pandas as pd
 from matplotlib import pyplot as plt
 
 from scipy.constants import physical_constants
@@ -24,22 +24,24 @@ def simple_formula(t, amp, gamma, sigma, Delta):
     return amp*np.exp(-gamma*t - (Delta*sigma*t)**2)
 
 
-def hyperfine_formula(t, amp, gamma, sigma, Delta, omega87, omega97,
-                      A, B, C, phib, phic):
+def hyperfine_formula(t, amp, gamma, sigma, Delta, omega87, omega97, omega107,
+                      A, B, C, D, phib, phic, phid):
     """Return points on the modeled hyperfine efficiency."""
     eta = amp*np.exp(-gamma*t - (Delta*sigma*t)**2)
     eta = eta*abs(A +
                   B*np.exp(1j*omega87*t+1j*phib) +
-                  C*np.exp(1j*omega97*t+1j*phic))**2
+                  C*np.exp(1j*omega97*t+1j*phic) +
+                  D*np.exp(1j*omega107*t+1j*phid))**2
     # eta = eta/abs(A+B*np.exp(1j*phib)+C*np.exp(1j*phic))**2
     return eta
 
 
-def get_model(gamma, sigma, Delta, omega87, omega97, fit_gamma=None):
+def get_model(gamma, sigma, Delta, omega87, omega97, omega107, fit_gamma=None):
     r"""Get a model to fit."""
-    def f(t, amp, A, B, C, phib, phic):
+    def f(t, amp, A, B, C, D, phib, phic, phid):
         return hyperfine_formula(t, amp, gamma, sigma, Delta,
-                                 omega87, omega97, A, B, C, phib, phic)
+                                 omega87, omega97, omega107,
+                                 A, B, C, D, phib, phic, phid)
 
     def g(t, gamma):
         return hyperfine_formula(t, amp, gamma, sigma, Delta,
@@ -165,22 +167,23 @@ eta_simple_cont = simple_formula(tdelay_cont, 1.0, gamma32rb,
                                  sigmarb, kmrb85)*0.22
 omega87 = 2*pi*28.8254e6
 omega97 = omega87 + 2*pi*22.954e6
+omega107 = omega97 + 2*pi*15.9384e6
 
 # We fit the hyperfine formula to the experimental data.
-f = get_model(gamma32rb, sigmarb, kmrb85, omega87, omega97)
-p0 = [1.0, 1.0/3, 1.0/3, 1.0/3, 0.0, 0.0]
+f = get_model(gamma32rb, sigmarb, kmrb85, omega87, omega97, omega107)
+p0 = [1.0, 1.0/3, 1.0/3, 1.0/3, 0.0, 0.0, 0.0, 0.0]
 res = curve_fit(f, tdelay_exp, eta_exp, p0=p0)
 p0 = res[0]
-amp, A, B, C, phib, phic = p0
-amp01 = amp*abs(A + B*np.exp(1j*phib) + C*np.exp(1j*phic))**2
+amp, A, B, C, D, phib, phic, phid = p0
+amp01 = amp*abs(A + B*np.exp(1j*phib) + C*np.exp(1j*phic)+D*np.exp(1j*phid))**2
 eta_exp_cont = f(tdelay_cont, *p0)/amp01
 
 # We fit the hyperfine formula to the hyperfine model.
 res = curve_fit(f, tdelay_exp, eta_hyp, p0=p0)
 p0 = res[0]
-amp, A, B, C, phib, phic = p0
-print A, B, C
-amp02 = amp*abs(A + B*np.exp(1j*phib) + C*np.exp(1j*phic))**2
+amp, A, B, C, D, phib, phic, phid = p0
+print A, B, C, D
+amp02 = amp*abs(A + B*np.exp(1j*phib) + C*np.exp(1j*phic)+D*np.exp(1j*phid))**2
 eta_hyp_cont = f(tdelay_cont, *p0)/amp02
 
 # We make a plot including the ab-initio formulas:
@@ -215,3 +218,16 @@ plt.savefig("doppler_dephasing_rb2.png", bbox_inches="tight")
 plt.savefig("doppler_dephasing_rb2.pdf", bbox_inches="tight")
 
 plt.close("all")
+
+# We save all the data.
+###############################################################################
+continous = np.asarray([tdelay_cont, eta_hyp_cont,
+                        eta_simple_cont/eta_simple_cont[0]]).T
+continous = pd.DataFrame(continous)
+continous.to_csv("eta_continous_rb.csv",
+                 header=["tdelay_cont", "etan_hyp", "etan_sim"])
+
+maxwell_bloch = np.asarray([tdelay_exp, eta_hyp/amp02]).T
+maxwell_bloch = pd.DataFrame(maxwell_bloch)
+maxwell_bloch.to_csv("eta_maxwell_bloch_rb.csv",
+                     header=["tdelay_exp", "etan_hyp"])
