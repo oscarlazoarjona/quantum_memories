@@ -320,16 +320,11 @@ def set_parameters_ladder(custom_parameters=None, fitted_couplings=True):
         # The detuning of the control field (in Hz):
         delta2 = -delta1
         # This is the two-photon transition condition.
-    #########################################################################
-    if True:
-        # Atomic properties.
+        ##################################################################
         # We choose an atom:
-        element = "Rb"; isotope = 85; n_atom = 5
-        element = "Rb"; isotope = 87; n_atom = 5
         element = "Cs"; isotope = 133; n_atom = 6
 
         # We calculate (or impose) the properties of the atom:
-
         # A decoherence frequency
         # gammaB = 2*pi*15e6
 
@@ -376,10 +371,12 @@ def set_parameters_ladder(custom_parameters=None, fitted_couplings=True):
            "t0r": t0r,
            "alpha_rw": alpha_rw,
            "t_cutoff": t_cutoff,
+           "element": element,
+           "isotope": isotope,
            "verbose": verbose}
 
     #########################################################################
-    # We replace inpdependent parameters by custom ones if given.
+    # We replace independent parameters by custom ones if given.
     if True:
         if custom_parameters is None:
             custom_parameters = {}
@@ -390,7 +387,8 @@ def set_parameters_ladder(custom_parameters=None, fitted_couplings=True):
                         "keep_data", "Temperature", "Nsigma", "delta1",
                         "sigma_power1", "sigma_power2", "w1", "w2",
                         "t0s", "t0w", "t0r",
-                        "alpha_rw", "t_cutoff", "verbose"]
+                        "alpha_rw", "t_cutoff",
+                        "element", "isotope", "verbose"]
 
         pm_names_dep = ["mass", "gamma21", "gamma32", "omega21", "omega32",
                         "omega_laser1", "omega_laser2", "delta2", "r1", "r2",
@@ -405,9 +403,15 @@ def set_parameters_ladder(custom_parameters=None, fitted_couplings=True):
         for name in pm_names_ind:
             if name in custom_parameters:
                 pms.update({name: custom_parameters[name]})
+                if type(custom_parameters[name]) is str:
+                    s = name+"= '"+str(custom_parameters[name])+"'"
+                else:
+                    s = name+"= "+str(custom_parameters[name])
+                exec(s)
 
     #########################################################################
     # We calculate dependent parameters
+    # print 111, element, isotope
     if calculate_atom:
         from fast import State, Transition, make_list_of_states
         from fast import calculate_boundaries, Integer
@@ -515,6 +519,7 @@ def set_parameters_ladder(custom_parameters=None, fitted_couplings=True):
         # print atom.mass
     else:
         if (element, isotope) == ("Rb", 85):
+
             gamma21, gamma32 = (38107518.888, 3102649.47106)
             if ignore_lower_f:
                 omega21, omega32 = (2.4141820325e+15, 2.42745336743e+15)
