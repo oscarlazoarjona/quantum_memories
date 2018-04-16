@@ -25,6 +25,6 @@ params["verbose"] = 0
 
 if __name__ == '__main__':
     name = "test"
-    opt_in, opt_out, opt_eta = orca.optimize_signal(params, plots=True,
-                                                    check=True)
-    print opt_eta
+    opt_in, opt_out, opt_eta, eff = orca.optimize_signal(params, plots=True,
+                                                         check=True)
+    print opt_eta, eff

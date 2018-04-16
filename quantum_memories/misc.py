@@ -46,7 +46,7 @@ def hg(n, x, x0, sigma):
 
 
 def Omega2_HG(Z, ti, sigma2w, sigma2r, Omega2, t0w, t0r,
-              alpha_rw, nw=0, nr=0, c=299792458):
+              alpha_rw, nw=0, nr=0):
     r"""Calculate the control field distribution.
     This function allows you to choose different energies, widths,
     and temporal modes for write and read pulses, respectively.
@@ -72,6 +72,7 @@ def Omega2_HG(Z, ti, sigma2w, sigma2r, Omega2, t0w, t0r,
     Return:
     ctrl -- numpy.ndarray containing the complex control field
     """
+    c = 299792458.0
     tauw = sqrt(log(2)) / (pi * sigma2w)  # width of write pulse
     taur = sqrt(log(2)) / (pi * sigma2r)  # width of read pulse
     # Calculate the write pulse
@@ -82,7 +83,7 @@ def Omega2_HG(Z, ti, sigma2w, sigma2r, Omega2, t0w, t0r,
     return ctrl
 
 
-def Omega1_boundary_HG(t, sigma1, Omega1, t0s, D, ns=0, c=299792458):
+def Omega1_boundary_HG(t, sigma1, Omega1, t0s, D, ns=0):
     r"""Calculate the boundary conditions for the signal field.
 
 
@@ -107,7 +108,7 @@ def Omega1_boundary_HG(t, sigma1, Omega1, t0s, D, ns=0, c=299792458):
     return sig_bound
 
 
-def Omega1_initial_HG(Z, sigma1, Omega1, t0s, ns=0, c=299792458):
+def Omega1_initial_HG(Z, sigma1, Omega1, t0s, ns=0):
     r"""Calculate the initial signal field.
 
 
@@ -126,9 +127,26 @@ def Omega1_initial_HG(Z, sigma1, Omega1, t0s, ns=0, c=299792458):
     Return:
     sig_init -- numpy.ndarray containing the complex initial signal
     """
+    c = 299792458.0
     tau = sqrt(log(2)) / (pi * sigma1)
     sig_init = Omega1 * hg(ns, -t0s, Z / c, tau)
     return sig_init
+
+
+def square(t, tau):
+    r"""This is a template."""
+    f = np.where(t/tau >= -0.5, 1.0, 0.0)*np.where(t/tau <= 0.5, 1.0, 0.0)
+    f = f*sqrt(tau)
+    return f
+
+
+def Omega2_square(Omega2, Z, ti, tau2, t0w, t0r, alpha_rw):
+    r"""Calculate the control field Rabi frequency for a specific ti."""
+    c = 299792458.0
+    pulse = Omega2/np.sqrt(tau2)*square((ti-t0w) + Z/c, tau2)
+    pulse += Omega2/np.sqrt(tau2)*square((ti-t0r) + Z/c, tau2)*alpha_rw
+
+    return pulse
 
 
 def simple_complex_plot(x, y, f, name, amount="", modsquare=False):
@@ -229,7 +247,6 @@ def set_parameters_ladder(custom_parameters=None, fitted_couplings=True):
 
         # optimize = True; optimize = False
         verbose = 1
-
         # We choose the units we want.
         units = "SI"  # ; units="fancy"
         if verbose >= 2: print "We are using "+units+" units!"
@@ -324,9 +341,8 @@ def set_parameters_ladder(custom_parameters=None, fitted_couplings=True):
         # We choose an atom:
         element = "Cs"; isotope = 133; n_atom = 6
 
-        # We calculate (or impose) the properties of the atom:
-        # A decoherence frequency
-        # gammaB = 2*pi*15e6
+        # Control pulse energy.
+        energy_pulse2 = 50e-12  # Joules.
 
     ################################################
     Omega = 1.0  # We choose the frequencies to be in radians/s.
@@ -369,6 +385,7 @@ def set_parameters_ladder(custom_parameters=None, fitted_couplings=True):
            "t0s": t0s,
            "t0w": t0w,
            "t0r": t0r,
+           "energy_pulse2": energy_pulse2,
            "alpha_rw": alpha_rw,
            "t_cutoff": t_cutoff,
            "element": element,
@@ -387,14 +404,14 @@ def set_parameters_ladder(custom_parameters=None, fitted_couplings=True):
                         "keep_data", "Temperature", "Nsigma", "delta1",
                         "sigma_power1", "sigma_power2", "w1", "w2",
                         "t0s", "t0w", "t0r",
-                        "alpha_rw", "t_cutoff",
-                        "element", "isotope", "verbose"]
+                        "energy_pulse2", "alpha_rw", "t_cutoff",
+                        "element", "isotope", "verbose",
+                        "USE_HG_CTRL", "USE_HG_SIG",
+                        "USE_SQUARE_CTRL", "USE_SQUARE_SIG"]
 
         pm_names_dep = ["mass", "gamma21", "gamma32", "omega21", "omega32",
                         "omega_laser1", "omega_laser2", "delta2", "r1", "r2",
-                        "energy_pulse1", "energy_pulse2",
-                        "ns", "nw", "nr",
-                        "USE_HG_CTRL", "USE_HG_SIG"]
+                        "ns", "nw", "nr", "tau1", "tau2", "energy_pulse1"]
 
         for i in custom_parameters:
             if (i not in pm_names_ind) and (i not in pm_names_dep):
@@ -411,7 +428,6 @@ def set_parameters_ladder(custom_parameters=None, fitted_couplings=True):
 
     #########################################################################
     # We calculate dependent parameters
-    # print 111, element, isotope
     if calculate_atom:
         from fast import State, Transition, make_list_of_states
         from fast import calculate_boundaries, Integer
@@ -567,12 +583,14 @@ def set_parameters_ladder(custom_parameters=None, fitted_couplings=True):
     energy_phot1 = hbar*omega_laser1
     # The energies of the pulses.
     energy_pulse1 = 1*energy_phot1  # Joules.
-    energy_pulse2 = 50e-12      # Joules.
 
     delta1 = pms["delta1"]
     delta2 = -delta1
     omega_laser1 = delta1 + omega21
     omega_laser2 = delta2 + omega32
+    tau1 = 2*sqrt(2)*log(2)/pi / sigma_power1
+    tau2 = 2*sqrt(2)*log(2)/pi / sigma_power2
+
     pms.update({"omega_laser1": omega_laser1, "omega_laser2": omega_laser2})
 
     # We make a few checks
@@ -594,11 +612,18 @@ def set_parameters_ladder(custom_parameters=None, fitted_couplings=True):
                 "r2": r2,
                 "energy_pulse1": energy_pulse1,
                 "energy_pulse2": energy_pulse2,
+                "tau1": tau1,
+                "tau2": tau2,
                 "ns": 1,
                 "nw": 1,
                 "nr": 1,
                 "USE_HG_CTRL": False,
                 "USE_HG_SIG": False})
+
+    if "USE_SQUARE_SIG" not in custom_parameters:
+        pms.update({"USE_SQUARE_SIG": False})
+    if "USE_SQUARE_CTRL" not in custom_parameters:
+        pms.update({"USE_SQUARE_CTRL": False})
 
     cond1 = "r1" not in custom_parameters
     cond2 = "r2" not in custom_parameters

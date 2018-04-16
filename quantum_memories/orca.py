@@ -19,13 +19,14 @@ References:
 """
 
 import numpy as np
-from math import pi, sqrt, log
+from math import sqrt, log
 from matplotlib import pyplot as plt
 from matplotlib import rcParams
 
 from misc import cheb, cDz, simple_complex_plot, set_parameters_ladder
 from misc import efficiencies, vapour_number_density
-from misc import Omega2_HG, Omega1_initial_HG, Omega1_boundary_HG
+from misc import (Omega2_HG, Omega1_initial_HG, Omega1_boundary_HG,
+                  Omega2_square)
 from scipy.constants import physical_constants
 from scipy.linalg import svd
 from scipy.integrate import complex_ode as ode
@@ -119,7 +120,8 @@ def solve(params, plots=False, name="", integrate_velocities=False,
         t0r = params["t0r"]
         alpha_rw = params["alpha_rw"]
         verbose = params["verbose"]
-
+        tau1 = params["tau1"]
+        tau2 = params["tau2"]
         #
         # Additions BB for Green's function calculations
         #
@@ -129,6 +131,9 @@ def solve(params, plots=False, name="", integrate_velocities=False,
         nr = params["nr"]
         USE_HG_CTRL = params["USE_HG_CTRL"]
         USE_HG_SIG = params["USE_HG_SIG"]
+        USE_SQUARE_CTRL = params["USE_SQUARE_CTRL"]
+        USE_SQUARE_SIG = params["USE_SQUARE_SIG"]
+
     if input_signal is not None:
         USE_INPUT_SIGNAL = True
         USE_HG_SIG = False
@@ -151,17 +156,20 @@ def solve(params, plots=False, name="", integrate_velocities=False,
     upper_fraction = (2*fground[1]+1)/(2*fground[0]+1.0 + 2*fground[1]+1.0)
     n_atomic0 = upper_fraction*n_atomic0
 
-    ##################################################
-    # We calculate the duration of the pulses from the standard deviations
-    tau1 = 2*sqrt(2)*log(2)/pi / sigma_power1
-    tau2 = 2*sqrt(2)*log(2)/pi / sigma_power2
-
     # We calculate the peak Rabi frequencies
     Omega1_peak = 4*2**(0.75)*np.sqrt(energy_pulse1)*e_charge*r1 *\
         (np.log(2.0))**(0.25)/(np.pi**(0.75)*hbar*w1*np.sqrt(c*epsilon_0*tau1))
 
     Omega2_peak = 4*2**(0.75)*np.sqrt(energy_pulse2)*e_charge*r2 *\
         (np.log(2.0))**(0.25)/(np.pi**(0.75)*hbar*w2*np.sqrt(c*epsilon_0*tau2))
+
+    if USE_SQUARE_CTRL:
+        Omega2_peak = 4*np.sqrt(energy_pulse2)*e_charge*r2
+        Omega2_peak = Omega2_peak/(hbar*w2*np.sqrt(np.pi*c*epsilon_0*tau2))
+    if USE_SQUARE_SIG:
+        Omega1_peak = 4*np.sqrt(energy_pulse1)*e_charge*r1 /\
+            (np.sqrt(np.pi)*np.sqrt(c)*sqrt(epsilon_0)*hbar*w1)
+
     if verbose >= 2:
         print "The peak Rabi frequencies are"
         print Omega1_peak/2/np.pi*Omega*1e-6, "MHz,",
@@ -198,7 +206,6 @@ def solve(params, plots=False, name="", integrate_velocities=False,
     # dvZ = vZ[1]-vZ[0]
     # p = p*dvZ/sum([p[i]*dvZ for i in range(Nv)])
     p = p/sum([p[i] for i in range(Nv)])
-    # print sum(g)
 
     # The atomic density n_atomic(t, Z)
     n_atomic = n_atomic0*(-heaviside(Z - 0.5 * L) + heaviside(0.5 * L + Z))
@@ -265,13 +272,24 @@ def solve(params, plots=False, name="", integrate_velocities=False,
         plt.close("all")
 
         const2 = np.pi*c*epsilon_0*hbar*(w2/e_charge/r2)**2/16.0/omega_laser2
-        if not USE_HG_CTRL:
-            Om2_mesh = [Omega2(ti, Z, Omega2_peak, tau2, t0w, t0r, alpha_rw)
-                        for ti in t_sample]
-        else:
+        if USE_HG_CTRL:
             Om2_mesh = [Omega2_HG(Z, ti, sigma_power2, sigma_power2,
                                   Omega2_peak, t0w, t0r,
                                   alpha_rw, nw=nw, nr=nr) for ti in t_sample]
+        elif USE_SQUARE_CTRL:
+            Om2_mesh = [Omega2_square(Omega2_peak, Z, ti, tau2, t0w, t0r,
+                                      alpha_rw) for ti in t_sample]
+            slice_ = Omega2_square(Omega2_peak, Z, t0w, tau2, t0w, t0r,
+                                   alpha_rw)
+        else:
+            Om2_mesh = [Omega2(ti, Z, Omega2_peak, tau2, t0w, t0r, alpha_rw)
+                        for ti in t_sample]
+            slice_ = Omega2(t0w, Z, Omega2_peak, tau2, t0w, t0r, alpha_rw)
+
+        plt.plot(Z, slice_*1e-9/2/np.pi, "b+-")
+        plt.savefig("a.png", bbox_inches="tight")
+        plt.close("all")
+
         Om2_mesh = np.array(Om2_mesh)
         Om2_mesh = const2*Om2_mesh**2
 
@@ -348,12 +366,15 @@ def solve(params, plots=False, name="", integrate_velocities=False,
         Nv = len(rho21i)
 
         # We calculate the control field at time ti.
-        if not USE_HG_CTRL:
-            Om2i = Omega2(ti, Z, Omega2_peak, tau2, t0w, t0r, alpha_rw)
-        else:
+        if USE_HG_CTRL:
             Om2i = Omega2_HG(Z, ti, sigma_power2, sigma_power2,
                              Omega2_peak, t0w, t0r, alpha_rw,
                              nw=nw, nr=nr)
+        elif USE_SQUARE_CTRL:
+            Om2i = Omega2_square(Omega2_peak, Z, ti,
+                                 tau2, t0w, t0r, alpha_rw)
+        else:
+            Om2i = Omega2(ti, Z, Omega2_peak, tau2, t0w, t0r, alpha_rw)
 
         # We calculate the right-hand sides of equations 1 and 2 for all
         # velocity groups.
@@ -518,7 +539,6 @@ def efficiencies_r1r2t0w(energy_pulse2, p, explicit_decoherence=None, name="",
 
     t, Z, vZ, rho, Om1 = solve(params, plots=False, name=name)
     del rho
-    # print "t_cutoff", params["t_cutoff"]
     eff_in, eff_out, eff = efficiencies(t, Om1, params, plots=True, name=name)
 
     # We explicitly introduce the measured decoherence.
@@ -544,7 +564,6 @@ def efficiencies_t0wenergies(p, explicit_decoherence=None, name=""):
     t0r = default_params["t0r"]
 
     # We unpack the errors.
-    # print "r1, r2:", r1/a0, r2/a0
     tmeet_error, energy_write, energy_read = p
     alpha_rw = np.sqrt(energy_read/energy_write)
 
@@ -619,7 +638,7 @@ def rel_error(a, b):
     return 1 - float(n)/m
 
 
-def greens(params, index, Nhg=5):
+def greens(params, index=0, Nhg=5):
     r"""Calculate the Green's function using params."""
     # We build the Green's function.
     t_cutoff = params["t_cutoff"]
@@ -665,7 +684,6 @@ def greens(params, index, Nhg=5):
                 break
             Kprev = K
             # check = ii >= 8*K
-            # print "check:", check, ii, 8*K, K, D[: 5]
             # if check:
             #     break
     # U, D, V = svd(Gri)
@@ -675,7 +693,6 @@ def greens(params, index, Nhg=5):
     Nhg = ii
     plt.figure()
     for i in range(Nhg):
-        # print ".............."
         Nin = num_integral(t_sample, phi[i]*phi[i].conjugate())
         Nout = num_integral(t_out, psi[i]*psi[i].conjugate())
         psi_cal = Gri.dot(ket(phi[i])).reshape(Ntout)
@@ -777,7 +794,7 @@ def greens(params, index, Nhg=5):
     return Gri, t_sample, t_out
 
 
-def optimize_signal(params, index, Nhg=5, plots=False, check=False,
+def optimize_signal(params, index=0, Nhg=5, plots=False, check=False,
                     name="optimal"):
     """Get the optimal signal modes and total efficiency."""
     Nhg = 25

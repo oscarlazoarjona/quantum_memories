@@ -174,6 +174,7 @@ t2rb85 = Transition(e3rb85, e2rb85)
 k1rb85 = 2*pi/t1rb85.wavelength
 k2rb85 = 2*pi/t2rb85.wavelength
 kmrb85 = abs(k2rb85-k1rb85)
+kmrb85 = 0.000001
 
 t1cs133 = Transition(e2cs133, e1cs133)
 t2cs133 = Transition(e3cs133, e2cs133)
@@ -234,6 +235,7 @@ eta_hyp_cont = f(tdelay_cont, *p0)/amp02
 tau_hfs = 0
 eta_pump = eta_simple_cont/eta_simple_cont[0]
 
+tau_fs = 0
 for i in range(len(eta_pump)):
     if eta_pump[i] < np.exp(-1.0):
         tau_fs = tdelay_cont[i]

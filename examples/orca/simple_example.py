@@ -83,7 +83,6 @@ We get the depenent paramters:
 """
 
 from time import time
-
 from quantum_memories import orca
 from quantum_memories.misc import set_parameters_ladder, efficiencies
 import numpy as np
