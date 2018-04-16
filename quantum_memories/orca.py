@@ -314,12 +314,12 @@ def solve(params, plots=False, name="", integrate_velocities=False,
 
     if USE_HG_SIG:
         Omega1_peak_norm = (2**3*np.log(2.0)/np.pi)**(0.25)/np.sqrt(tau1)
-        Omega1_boundary = Omega1_boundary_HG(t, 1*sigma_power1,
+        Omega1_boundary = Omega1_boundary_HG(t_sample, 1*sigma_power1,
                                              Omega1_peak_norm,
                                              t0s, D, ns=ns)
         Omega1_initial = Omega1_initial_HG(Z, 1*sigma_power1, Omega1_peak_norm,
                                            t0s, ns=ns)
-        dtt = t[1]-t[0]
+        dtt = t_sample[1]-t_sample[0]
         norm = sum([Omega1_boundary[i]*Omega1_boundary[i].conjugate()
                     for i in range(len(Omega1_boundary))])*dtt
         Omega1_boundary = Omega1_boundary/np.sqrt(norm)
@@ -334,8 +334,9 @@ def solve(params, plots=False, name="", integrate_velocities=False,
 
         Omega1_initial = np.zeros(Nz, complex)
     if (not USE_HG_SIG) and (not USE_INPUT_SIGNAL):
+        arg = (t_sample - t0s + D/2/c)
         Omega1_boundary = Omega1_peak*np.exp(-4*np.log(2.0) *
-                                             (t - t0s + D/2/c)**2/tau1**2)
+                                             arg**2/tau1**2)
         # The signal pulse at t = 0 is
         Omega1_initial = Omega1_peak*np.exp(-4*np.log(2.0) *
                                             (-t0s-Z/c)**2/tau1**2)
@@ -419,25 +420,6 @@ def solve(params, plots=False, name="", integrate_velocities=False,
         kk = pack_slice(rhok, Om1k, Nt_sample, Nrho, Nv, Nz)
         return kk
 
-    # def complex2real(yyii):
-    #     Nvar = len(yyii)
-    #     xxii = np.zeros(2*Nvar)
-    #     xxii[:Nvar] = np.real(yyii)
-    #     xxii[Nvar:] = np.imag(yyii)
-    #     return xxii
-    #
-    # def real2complex(xxii):
-    #     Nvar = len(xxii)/2
-    #     yyii = np.zeros(Nvar, complex)
-    #     yyii = xxii[:Nvar]+1j*xxii[Nvar:]
-    #     return yyii
-    #
-    # def g(xxii, ti):
-    #     print "ti", ti*1e9
-    #     yyii = real2complex(xxii)
-    #     kk = f(ti, yyii)
-    #     return complex2real(kk)
-
     ii = 0
     # We carry out the Runge-Kutta method.
     ti = 0.0
@@ -456,20 +438,7 @@ def solve(params, plots=False, name="", integrate_velocities=False,
     # solver.set_integrator('dop853')  # 7.7936398983 s.
     # solver.set_integrator("vode", method='bdf')  # 6.64 s
     solver.set_initial_value(yyii, ti)
-    Omega1_boundary2 = Omega1_peak *\
-        np.exp(-4*np.log(2.0)*(t_sample - t0s + D/2/c)**2/tau1**2)
-
-    Omega1_boundary = Omega1_boundary2
     ii = 0
-    # kkii = f(ti, yyii)
-    # rhok1, Om1k1 = unpack_slice(kkii, Nt_sample, Nrho, Nv, Nz)
-
-    # xxii = complex2real(yyii)
-    # xx = odeint(g, xxii, t_sample)
-    # for ii in range(len(t_sample)):
-    #     rho[ii], Om1[ii] = unpack_slice(real2complex(xx[ii]),
-    #                                     Nt_sample, Nrho, Nv, Nz)
-
     while solver.successful() and ii < Nt_sample-1:
         # We advance
         solver.integrate(solver.t+dt)
@@ -638,7 +607,7 @@ def rel_error(a, b):
     return 1 - float(n)/m
 
 
-def greens(params, index=0, Nhg=5):
+def greens(params, index=0, Nhg=15, plots=False, verbose=False):
     r"""Calculate the Green's function using params."""
     # We build the Green's function.
     t_cutoff = params["t_cutoff"]
@@ -652,11 +621,10 @@ def greens(params, index=0, Nhg=5):
 
     phi = []; psi = []
     Gri = np.zeros((Ntout, Nt), complex)
-    print "The size of Green's function", Gri.shape
-    Nhg = 15
-    Kprev = 1e6
+    if verbose: print "The size of Green's function", Gri.shape
+    Kprev = float("inf")
     for ii in range(Nhg):
-        print ("Mode order %i" % ii)
+        print ("Mode order %i" % ii),
         params["ns"] = ii
         # We solve for the Hermite Gauss mode of order 0.
         aux = solve(params, integrate_velocities=True)
@@ -667,6 +635,7 @@ def greens(params, index=0, Nhg=5):
         Om1_in = Om1[:, 0]
         Om1_out = np.array([Om1[i, -1] for i in range(Nt)
                             if t_sample[i] > t_cutoff])
+
         Ntout = len(Om1_out)
         Gri += ket(Om1_out).dot(bra(Om1_in))*dt
         phi += [Om1_in]
@@ -678,120 +647,102 @@ def greens(params, index=0, Nhg=5):
             K = 1.0/(DD**4).sum()
             K_change = rel_error(K, Kprev)
 
-            check = K_change <= 0.01
-            print ii, K, Kprev, K_change, check
-            if check:
+            convergence = K_change <= 0.01
+            if verbose: print "Schmidt number:", K, "convergence", convergence
+            if convergence:
                 break
             Kprev = K
-            # check = ii >= 8*K
-            # if check:
-            #     break
-    # U, D, V = svd(Gri)
+        else:
+            print
 
     print "Checking Green's function..."
     plt.close("all")
     Nhg = ii
     plt.figure()
-    for i in range(Nhg):
+    for i in range(Nhg+1):
         Nin = num_integral(t_sample, phi[i]*phi[i].conjugate())
         Nout = num_integral(t_out, psi[i]*psi[i].conjugate())
         psi_cal = Gri.dot(ket(phi[i])).reshape(Ntout)
         Ncal = num_integral(t_out, psi_cal*psi_cal.conjugate())
-        print i, Nin, Nout, Ncal
+        if verbose: print i, Nin, Nout, Ncal
+        if plots:
+            plt.subplot(211)
+            plt.plot(t_sample*1e9, np.abs(phi[i]*phi[i].conjugate())*1e-9,
+                     label=str(i))
+            plt.ylabel("Test inputs (photons/ns)")
+            plt.subplot(212)
+            plt.plot(t_out*1e9, np.abs(psi[i]*psi[i].conjugate())*1e-9,
+                     label=str(i))
+            plt.ylabel("Test outputs (photons/ns)")
+            plt.xlabel("t (ns)")
+    if plots:
         plt.subplot(211)
-        plt.plot(t_sample, np.abs(phi[i]*phi[i].conjugate()), label=str(i))
+        plt.legend()
         plt.subplot(212)
-        plt.plot(t_out, np.abs(psi[i]*psi[i].conjugate()), label=str(i))
-    plt.subplot(211)
-    plt.legend()
-    plt.subplot(212)
-    plt.legend()
-    plt.savefig("a"+str(index)+".png")
-    plt.close("all")
+        plt.legend()
+        plt.savefig("a"+str(index)+".png")
+        plt.close("all")
 
-    print "testing singular modes..."
+    if verbose: print "testing singular modes..."
     plt.figure()
-    for ii in range(Nhg):
+    phi = []; eta = []; psi = []
+    for ii in range(Nhg+1):
         # print ".............."
         dt = t_sample[1]-t_sample[0]
         phii = V[ii, :].conjugate()/np.sqrt(dt)
-        Nin = num_integral(t_sample, phii*phii.conjugate())
+        psii = U[:, ii]/np.sqrt(dt)
         Nout = D[ii]**2
+        phi += [phii]
+        eta += [Nout]
+        psi += [psii]
+
+        Nin = num_integral(t_sample, phii*phii.conjugate())
         psi_cal = Gri.dot(ket(phii)).reshape(Ntout)
         Ncal = num_integral(t_out, psi_cal*psi_cal.conjugate())
-        print ii, Nin, Nout, Ncal
+        if verbose: print ii, Nin, Nout, Ncal
+        if plots:
+            plt.subplot(211)
+            plt.plot(t_sample*1e9, np.abs(phii*phii.conjugate())*1e-9,
+                     label=str(ii))
+            plt.ylabel("Input modes (photons/ns)")
+            plt.subplot(212)
+            plt.plot(t_out*1e9, np.abs(psii*psii.conjugate())*1e-9,
+                     label=str(ii))
+            plt.ylabel("Output modes (photons/ns)")
+            plt.xlabel("t (ns)")
+    if plots:
         plt.subplot(211)
-        plt.plot(t_sample, 1e-9*np.abs(phii*phii.conjugate()),
-                 label=str(ii))
+        plt.legend()
         plt.subplot(212)
-        plt.plot(t_out, np.abs(U[:, ii]*U[:, ii].conjugate()),
-                 label=str(ii))
-    plt.subplot(211)
-    plt.legend()
-    plt.subplot(212)
-    plt.legend()
-    plt.savefig("b"+str(index)+".png")
-    plt.close("all")
+        plt.legend()
+        plt.savefig("b"+str(index)+".png")
+        plt.close("all")
 
-    # Vhg = V
-    # # We make the Green's function converge.
-    # print "Using single modes..."
-    # Gri = np.zeros((Ntout, Nt), complex)
-    # Nmodes = Nhg
-    # phi = []; psi = []
-    # for ii in range(Nmodes):
-    #     print ("Mode order %i" % ii)
-    #     params["ns"] = ii
-    #     norm = num_integral(t_sample, Vhg[ii, :]*Vhg[ii, :].conjugate())
-    #     phi_i = Vhg[ii, :] / np.sqrt(np.real(norm))
-    #     # We solve for the Hermite Gauss mode of order 0.
-    #     aux = solve(params, integrate_velocities=True,
-    #                 input_signal=phi_i)
-    #     t_sample, Z, rho31, Om1 = aux
-    #     Nt = len(t_sample); dt = t_sample[1]-t_sample[0]
-    #
-    #     # Extract input and output.
-    #     Om1_in = Om1[:, 0]
-    #     Om1_out = np.array([Om1[i, -1] for i in range(Nt)
-    #                         if t_sample[i] > t_cutoff])
-    #     Ntout = len(Om1_out)
-    #     Gri += ket(Om1_out).dot(bra(Om1_in))*dt
-    #     phi += [Om1_in]
-    #     psi += [Om1_out]
-    #     # if ii >= 4:
-    #     #     U, D, V = svd(Gri)
-    #     #     DD = D/np.sqrt(sum(D**2))
-    #     #     K = 1.0/(DD**4).sum()
-    #     #     check = ii >= 3*K
-    #     #     print "check:", check, ii, 3*K, K, D[: 5]
-    #     #     if check:
-    #     #         break
-    #
-    # Nhg = ii
-    # # We check that the Green's function does its job.
-    # print "Checking Green's function..."
-    #
-    # plt.close("all")
-    # plt.figure()
-    # for i in range(Nmodes):
-    #     # print ".............."
-    #     Nin = num_integral(t_sample, phi[i]*phi[i].conjugate())
-    #     Nout = num_integral(t_out, psi[i]*psi[i].conjugate())
-    #     psi_cal = Gri.dot(ket(phi[i])).reshape(Ntout)
-    #     Ncal = num_integral(t_out, psi_cal*psi_cal.conjugate())
-    #     print i, Nin, Nout, Ncal
-    #     plt.subplot(211)
-    #     plt.plot(t_sample, np.abs(phi[i]*phi[i].conjugate()), label=str(i))
-    #     plt.subplot(212)
-    #     plt.plot(t_out, np.abs(psi[i]*psi[i].conjugate()), label=str(i))
-    # plt.subplot(211)
-    # plt.legend()
-    # plt.subplot(212)
-    # plt.legend()
-    # plt.savefig("b"+str(index)+".png")
-    # plt.close("all")
+        # Plotting.
+        T, S = np.meshgrid(t_sample*1e9, t_out*1e9)
+        plt.figure()
+        cs = plt.contourf(T, S, abs(Gri)**2, 256)
+        plt.tight_layout()
+        plt.savefig("Greens"+str(index)+".png", bbox_inches="tight")
+        plt.colorbar(cs)
+        plt.xlabel(r"$t \ \mathrm{(ns)}$")
+        plt.ylabel(r"$t \ \mathrm{(ns)}$")
+        plt.close("all")
 
-    return Gri, t_sample, t_out
+        plt.figure()
+        plt.subplot(121)
+        plt.title("singular values")
+        plt.xlabel("Modes")
+        plt.bar(np.arange(Nhg+1), np.sqrt(eta))
+        plt.subplot(122)
+        plt.title("efficiencies")
+        plt.xlabel("Modes")
+        plt.bar(np.arange(Nhg+1), eta)
+        plt.tight_layout()
+        plt.savefig("singular_values"+str(index)+".png", bbox_inches="tight")
+        plt.close("all")
+
+    return Gri, t_sample, t_out, phi, eta, psi
 
 
 def optimize_signal(params, index=0, Nhg=5, plots=False, check=False,
@@ -830,16 +781,6 @@ def optimize_signal(params, index=0, Nhg=5, plots=False, check=False,
         print "The actual efficiency is", eff
     ##########################################################################
     if plots:
-        # Plotting.
-        T, S = np.meshgrid(t_sample*1e9, t_out*1e9)
-        plt.figure()
-        cs = plt.contourf(T, S, abs(Gri)**2, 256)
-        plt.tight_layout()
-        plt.savefig("Greens"+str(index)+".png", bbox_inches="tight")
-        plt.colorbar(cs)
-        plt.xlabel(r"$t \ \mathrm{(ns)}$")
-        plt.ylabel(r"$t \ \mathrm{(ns)}$")
-        plt.close("all")
 
         # We plot the one-photon modes.
         ii = 0
@@ -873,7 +814,6 @@ def optimize_signal(params, index=0, Nhg=5, plots=False, check=False,
         plt.tight_layout()
         plt.savefig("singular_modes.png", bbox_inches="tight")
         plt.close("all")
-        # plt.show()
 
         plt.figure()
         plt.subplot(121)

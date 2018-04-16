@@ -25,6 +25,5 @@ params["verbose"] = 0
 
 if __name__ == '__main__':
     name = "test"
-    opt_in, opt_out, opt_eta, eff = orca.optimize_signal(params, plots=True,
-                                                         check=True)
-    print opt_eta, eff
+    aux = orca.greens(params, plots=True, verbose=True)
+    Gri, t_sample, t_out, phi, eta, psi = aux
