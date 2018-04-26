@@ -19,7 +19,7 @@ References:
 """
 
 import numpy as np
-from math import sqrt, log
+from math import sqrt, log, pi
 from matplotlib import pyplot as plt
 from matplotlib import rcParams
 
@@ -313,6 +313,7 @@ def solve(params, plots=False, name="", integrate_velocities=False,
         (np.log(2.0))**(0.25)/(np.pi**(0.75)*hbar*w1*np.sqrt(c*epsilon_0*tau1))
 
     if USE_HG_SIG:
+        sigma_power1 = 2*sqrt(2)*log(2)/pi / tau1
         Omega1_peak_norm = (2**3*np.log(2.0)/np.pi)**(0.25)/np.sqrt(tau1)
         Omega1_boundary = Omega1_boundary_HG(t_sample, 1*sigma_power1,
                                              Omega1_peak_norm,
@@ -454,6 +455,11 @@ def solve(params, plots=False, name="", integrate_velocities=False,
         solver.t+dt
         rho[ii] = rhoii
         Om1[ii] = Om1ii
+
+    # plt.close()
+    # plt.plot(t_sample, np.abs(Om1[:, 0]))
+    # plt.show()
+    # plt.close()
 
     # We plot the solution.
     if plots:
@@ -607,11 +613,11 @@ def rel_error(a, b):
     return 1 - float(n)/m
 
 
-def greens(params, index=0, Nhg=15, plots=False, verbose=False):
+def greens(params, index=0, Nhg=20, plots=False, verbose=False):
     r"""Calculate the Green's function using params."""
     # We build the Green's function.
+    params["USE_HG_SIG"] = True
     t_cutoff = params["t_cutoff"]
-
     t_sample = np.linspace(0, params["T"],
                            params["Nt"]/params["sampling_rate"])
     Nt = len(t_sample); dt = t_sample[1]-t_sample[0]
@@ -624,7 +630,7 @@ def greens(params, index=0, Nhg=15, plots=False, verbose=False):
     if verbose: print "The size of Green's function", Gri.shape
     Kprev = float("inf")
     for ii in range(Nhg):
-        print ("Mode order %i" % ii),
+        print ("Mode order %i," % ii),
         params["ns"] = ii
         # We solve for the Hermite Gauss mode of order 0.
         aux = solve(params, integrate_velocities=True)
@@ -670,11 +676,13 @@ def greens(params, index=0, Nhg=15, plots=False, verbose=False):
             plt.plot(t_sample*1e9, np.abs(phi[i]*phi[i].conjugate())*1e-9,
                      label=str(i))
             plt.ylabel("Test inputs (photons/ns)")
+            plt.xlim([0.5, 1.5])
             plt.subplot(212)
             plt.plot(t_out*1e9, np.abs(psi[i]*psi[i].conjugate())*1e-9,
                      label=str(i))
             plt.ylabel("Test outputs (photons/ns)")
             plt.xlabel("t (ns)")
+            plt.xlim([4.5, 5.5])
     if plots:
         plt.subplot(211)
         plt.legend()
@@ -705,11 +713,18 @@ def greens(params, index=0, Nhg=15, plots=False, verbose=False):
             plt.plot(t_sample*1e9, np.abs(phii*phii.conjugate())*1e-9,
                      label=str(ii))
             plt.ylabel("Input modes (photons/ns)")
+            plt.xlim([0.5, 1.5])
             plt.subplot(212)
             plt.plot(t_out*1e9, np.abs(psii*psii.conjugate())*1e-9,
                      label=str(ii))
             plt.ylabel("Output modes (photons/ns)")
             plt.xlabel("t (ns)")
+            plt.xlim([4.5, 5.5])
+
+    phi = np.array(phi)
+    psi = np.array(psi)
+    eta = np.array(eta)
+
     if plots:
         plt.subplot(211)
         plt.legend()
@@ -723,10 +738,10 @@ def greens(params, index=0, Nhg=15, plots=False, verbose=False):
         plt.figure()
         cs = plt.contourf(T, S, abs(Gri)**2, 256)
         plt.tight_layout()
-        plt.savefig("Greens"+str(index)+".png", bbox_inches="tight")
         plt.colorbar(cs)
-        plt.xlabel(r"$t \ \mathrm{(ns)}$")
-        plt.ylabel(r"$t \ \mathrm{(ns)}$")
+        plt.xlabel(r"$t_{in} \ \mathrm{(ns)}$", fontsize=20)
+        plt.ylabel(r"$t_{out} \ \mathrm{(ns)}$", fontsize=20)
+        plt.savefig("Greens"+str(index)+".png", bbox_inches="tight")
         plt.close("all")
 
         plt.figure()

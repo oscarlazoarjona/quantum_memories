@@ -14,7 +14,6 @@ from quantum_memories.misc import set_parameters_ladder
 params = set_parameters_ladder()
 params["alpha_rw"] = 1.0
 params["USE_HG_CTRL"] = False
-params["USE_HG_SIG"] = True
 params["nw"] = 0
 params["ns"] = 0
 params["nr"] = 0
