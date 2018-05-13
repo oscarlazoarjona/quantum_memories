@@ -650,7 +650,7 @@ def greens(params, Nhg=100, plots=False, name="", folder="", verbose=False):
         phi += [Om1_in]
         psi += [Om1_out]
 
-        if ii >= 2:
+        if ii >= 4:
             U, D, V = svd(Gri)
             DD = D/np.sqrt(sum(D**2))
             K = 1.0/(DD**4).sum()
