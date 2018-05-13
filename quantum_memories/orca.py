@@ -71,7 +71,7 @@ def pack_slice(rhoi, Om1i, Nt, Nrho, Nv, Nz):
     return yyii
 
 
-def solve(params, plots=False, name="", integrate_velocities=False,
+def solve(params, plots=False, name="", folder="", integrate_velocities=False,
           input_signal=None):
     r"""Solve the equations for the given parameters."""
     def heaviside(x):
@@ -260,7 +260,7 @@ def solve(params, plots=False, name="", integrate_velocities=False,
         ax2.set_xlim([dd_lim, -dd_lim])
         ax2.set_ylim([0.0, None])
 
-        plt.savefig("params_vZ_"+name+".png", bbox_inches="tight")
+        plt.savefig(folder+"params_vZ_"+name+".png", bbox_inches="tight")
         plt.close("all")
 
         plt.title(r"$\mathrm{Atomic \ density}$", fontsize=20)
@@ -268,7 +268,7 @@ def solve(params, plots=False, name="", integrate_velocities=False,
         plt.plot(Z/distance_unit*100, n_atomic, "b-")
         plt.xlabel(r"$ Z \ (\mathrm{cm})$", fontsize=20)
         plt.ylabel(r"$ n \ (\mathrm{m^{-3}})$", fontsize=20)
-        plt.savefig("params_n_atomic_"+name+".png", bbox_inches="tight")
+        plt.savefig(folder+"params_n_atomic_"+name+".png", bbox_inches="tight")
         plt.close("all")
 
         const2 = np.pi*c*epsilon_0*hbar*(w2/e_charge/r2)**2/16.0/omega_laser2
@@ -287,7 +287,7 @@ def solve(params, plots=False, name="", integrate_velocities=False,
             slice_ = Omega2(t0w, Z, Omega2_peak, tau2, t0w, t0r, alpha_rw)
 
         plt.plot(Z, slice_*1e-9/2/np.pi, "b+-")
-        plt.savefig("a.png", bbox_inches="tight")
+        plt.savefig(folder+"params_control_"+name+".png", bbox_inches="tight")
         plt.close("all")
 
         Om2_mesh = np.array(Om2_mesh)
@@ -302,7 +302,7 @@ def solve(params, plots=False, name="", integrate_velocities=False,
                  [0, T*Omega*1e9], "r-", linewidth=1)
         plt.xlabel(r"$ Z \ (\mathrm{cm})$", fontsize=20)
         plt.ylabel(r"$ t \ (\mathrm{ns})$", fontsize=20)
-        plt.savefig("params_Om2_"+name+".png", bbox_inches="tight")
+        plt.savefig(folder+"params_Om2_"+name+".png", bbox_inches="tight")
         plt.close("all")
 
         del Om2_mesh
@@ -355,6 +355,7 @@ def solve(params, plots=False, name="", integrate_velocities=False,
               omega_laser1, omega_laser2)
 
     # We define the equations that the Runge-Kutta method will solve.
+
     def rhs(rhoi, Om1i, ti, params):
         # We unpack the parameters.
         delta1, delta2, gamma21, gamma32, g1 = params[:5]
@@ -470,12 +471,14 @@ def solve(params, plots=False, name="", integrate_velocities=False,
         rho31 = rho_tot[:, 1, :]
 
         simple_complex_plot(Z*100, t_sample*1e9, np.sqrt(const1*1e-9)*Om1,
-                            "sol_Om1_"+name+".png", amount=r"\Omega_s",
-                            modsquare=True)
+                            folder+"sol_Om1_"+name+".png",
+                            amount=r"\Omega_s", modsquare=True)
         simple_complex_plot(Z*100, t_sample*1e9, rho21,
-                            "sol_rho21_"+name+".png", amount=r"\rho_{21}")
+                            folder+"sol_rho21_"+name+".png",
+                            amount=r"\rho_{21}")
         simple_complex_plot(Z*100, t_sample*1e9, rho31,
-                            "sol_rho31_"+name+".png", amount=r"\rho_{31}")
+                            folder+"sol_rho31_"+name+".png",
+                            amount=r"\rho_{31}")
 
     if integrate_velocities:
         rho_tot = sum(p[jj] * rho[:, :, jj, :] for jj in range(Nv))
@@ -613,7 +616,7 @@ def rel_error(a, b):
     return 1 - float(n)/m
 
 
-def greens(params, index=0, Nhg=20, plots=False, verbose=False):
+def greens(params, Nhg=100, plots=False, name="", folder="", verbose=False):
     r"""Calculate the Green's function using params."""
     # We build the Green's function.
     params["USE_HG_SIG"] = True
@@ -688,7 +691,7 @@ def greens(params, index=0, Nhg=20, plots=False, verbose=False):
         plt.legend()
         plt.subplot(212)
         plt.legend()
-        plt.savefig("a"+str(index)+".png")
+        plt.savefig(folder+name+"a.png")
         plt.close("all")
 
     if verbose: print "testing singular modes..."
@@ -730,7 +733,7 @@ def greens(params, index=0, Nhg=20, plots=False, verbose=False):
         plt.legend()
         plt.subplot(212)
         plt.legend()
-        plt.savefig("b"+str(index)+".png")
+        plt.savefig(folder+name+"b.png")
         plt.close("all")
 
         # Plotting.
@@ -741,7 +744,7 @@ def greens(params, index=0, Nhg=20, plots=False, verbose=False):
         plt.colorbar(cs)
         plt.xlabel(r"$t_{in} \ \mathrm{(ns)}$", fontsize=20)
         plt.ylabel(r"$t_{out} \ \mathrm{(ns)}$", fontsize=20)
-        plt.savefig("Greens"+str(index)+".png", bbox_inches="tight")
+        plt.savefig(folder+name+"Greens.png", bbox_inches="tight")
         plt.close("all")
 
         plt.figure()
@@ -754,7 +757,7 @@ def greens(params, index=0, Nhg=20, plots=False, verbose=False):
         plt.xlabel("Modes")
         plt.bar(np.arange(Nhg+1), eta)
         plt.tight_layout()
-        plt.savefig("singular_values"+str(index)+".png", bbox_inches="tight")
+        plt.savefig(folder+name+"singular_values.png", bbox_inches="tight")
         plt.close("all")
 
     return Gri, t_sample, t_out, phi, eta, psi
