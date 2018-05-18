@@ -27,7 +27,8 @@ from misc import cheb, cDz, simple_complex_plot, set_parameters_ladder
 from misc import efficiencies, vapour_number_density
 from misc import (Omega2_HG, Omega1_initial_HG, Omega1_boundary_HG,
                   Omega2_square)
-from scipy.constants import physical_constants
+# from misc import Omega2_SB, Omega1_initial_SB, Omega1_boundary_SB
+from scipy.constants import physical_constants, c
 from scipy.linalg import svd
 from scipy.integrate import complex_ode as ode
 # from scipy.integrate import odeint
@@ -218,13 +219,11 @@ def solve(params, plots=False, name="", folder="", integrate_velocities=False,
         Nt_sample = Nt
         Om1 = np.zeros((Nt_sample, Nz), complex)
         rho = np.zeros((Nt_sample, Nrho, Nv, Nz), complex)
-
     elif keep_data == "sample":
         Nt_sample = Nt/sampling_rate
         t_sample = np.linspace(0, T, Nt_sample)
         Om1 = np.zeros((Nt_sample, Nz), complex)
         rho = np.zeros((Nt_sample, Nrho, Nv, Nz), complex)
-
     elif keep_data == "current":
         # t_sample = np.zeros(1)
         Om1 = np.zeros((1, Nz), complex)
@@ -329,8 +328,9 @@ def solve(params, plots=False, name="", folder="", integrate_velocities=False,
     if USE_INPUT_SIGNAL:
         # We get the boundary by extending the input signal to
         # account for the sampling rate.
-        Omega1_boundary = sum([[omi]*sampling_rate
-                               for omi in input_signal], [])
+        # Omega1_boundary = sum([[omi]*sampling_rate
+        #                        for omi in input_signal], [])
+        Omega1_boundary = input_signal
         Omega1_boundary = np.array(Omega1_boundary)
 
         Omega1_initial = np.zeros(Nz, complex)
@@ -616,7 +616,8 @@ def rel_error(a, b):
     return 1 - float(n)/m
 
 
-def greens(params, Nhg=100, plots=False, name="", folder="", verbose=False):
+def greens(params, Nhg=100, plots=False, name="", folder="", verbose=False,
+           plot_in_Z=False, check_convergence=False):
     r"""Calculate the Green's function using params."""
     # We build the Green's function.
     params["USE_HG_SIG"] = True
@@ -628,10 +629,14 @@ def greens(params, Nhg=100, plots=False, name="", folder="", verbose=False):
                       if t_sample[i] > t_cutoff])
     Ntout = len(t_out)
 
+    ########################################################################
+    # We make an initial guess for the Green's function.
     phi = []; psi = []
     Gri = np.zeros((Ntout, Nt), complex)
     if verbose: print "The size of Green's function", Gri.shape
     Kprev = float("inf")
+    check_list = [False for i in range(4)]
+    K_list = []
     for ii in range(Nhg):
         print ("Mode order %i," % ii),
         params["ns"] = ii
@@ -655,15 +660,34 @@ def greens(params, Nhg=100, plots=False, name="", folder="", verbose=False):
             DD = D/np.sqrt(sum(D**2))
             K = 1.0/(DD**4).sum()
             K_change = rel_error(K, Kprev)
+            K_list += [K]
 
-            convergence = K_change <= 0.01
-            if verbose: print "Schmidt number:", K, "convergence", convergence
+            check = K_change <= 0.001
+            if check:
+                for i in range(4):
+                    # print i, check_list
+                    if not check_list[i]:
+                        check_list[i] = True
+                        break
+            else:
+                check_list = [False for i in range(4)]
+            convergence = True
+            for i in check_list:
+                convergence = convergence and i
+
+            if verbose:
+                print "Schmidt number:", K, K_change,
+                print "check_list:", check_list,
+                print "convergence", convergence
+
             if convergence:
                 break
+
             Kprev = K
         else:
             print
 
+    ########################################################################
     print "Checking Green's function..."
     plt.close("all")
     Nhg = ii
@@ -724,26 +748,130 @@ def greens(params, Nhg=100, plots=False, name="", folder="", verbose=False):
             plt.xlabel("t (ns)")
             plt.xlim([4.5, 5.5])
 
-    phi = np.array(phi)
-    psi = np.array(psi)
-    eta = np.array(eta)
-
+    # We recalculate the Green's function in terms of normalized modes.
+    Gri = Gri/dt
     if plots:
+        Nhg = len(eta)
         plt.subplot(211)
         plt.legend()
         plt.subplot(212)
         plt.legend()
         plt.savefig(folder+name+"b.png")
         plt.close("all")
+    phi = np.array(phi)
+    psi = np.array(psi)
+    eta = np.array(eta)
 
-        # Plotting.
-        T, S = np.meshgrid(t_sample*1e9, t_out*1e9)
+    ########################################################################
+    # We check that the psi are in deed the output of phi.
+    if check_convergence:
+        Nhg = len(phi)
+        Gri_conv = np.zeros((Ntout, Nt), complex)
+        phi_conv = []; psi_conv = []
+        print "Checking convergence..."
+        plt.close("all")
         plt.figure()
-        cs = plt.contourf(T, S, abs(Gri)**2, 256)
+        for ii in range(Nhg):
+            print "Checking mode", ii, "...",
+            params["USE_INPUT_SIGNAL"] = True
+            aux = solve(params, integrate_velocities=True,
+                        input_signal=phi[ii])
+            t_sample, Z, rho31, Om1 = aux
+            psi_convii = np.array([Om1[i, -1] for i in range(Nt)
+                                   if t_sample[i] > t_cutoff])
+
+            Gri_conv += ket(psi_convii).dot(bra(phi[ii]))
+            phi_conv += [phi[ii]]
+            psi_conv += [psi_convii]
+
+            xi = np.sqrt(eta[ii])*psi[ii]
+            yi = psi_conv[ii]
+            maxi = max([np.amax(np.abs(xi)), np.amax(np.abs(yi))])
+            rel_dif = (xi-yi)/maxi
+            print num_integral(t_sample, np.abs(phi[ii])**2),
+            print num_integral(t_out, np.abs(psi_convii)**2),
+            print np.amax(np.abs(rel_dif))
+
+            if plots:
+                plt.subplot(211)
+                plt.plot(t_out*1e9, np.abs(xi), label=str(ii))
+                plt.plot(t_out*1e9, np.abs(yi), label=str(ii))
+                plt.subplot(212)
+                plt.plot(t_out*1e9, np.abs(rel_dif), label=str(ii))
+
+        phi_conv = np.array(phi_conv)
+        psi_conv = np.array(psi_conv)
+        np.save(folder+"phi_conv"+name+".npy", phi_conv)
+        np.save(folder+"psi_conv"+name+".npy", psi_conv)
+
+    if plots:
+        Nhg = len(eta)
+        plt.subplot(211)
+        plt.ylabel("Input modes (photons/ns)")
+        plt.xlabel("t (ns)")
+        plt.xlim([4.5, 5.5])
+        plt.legend(ncol=2)
+
+        plt.subplot(212)
+        plt.ylabel("Relative difference")
+        plt.xlabel("t (ns)")
+        plt.xlim([4.5, 5.5])
+        plt.legend(ncol=2)
+
+        plt.savefig(folder+name+"c.png")
+        plt.close("all")
+
+    # phi_conv = np.array(phi_conv)
+    # psi_conv = np.array(psi_conv)
+    # np.save(folder+"phi_conv.npy", phi_conv)
+    # np.save(folder+"psi_conv.npy", psi_conv)
+
+    if plots:
+        # Plotting.
+        if plot_in_Z:
+            aux = (params, t_sample, t_out, phi, eta, psi)
+            z_ini, z_out, Griz = transformG(*aux)
+            # Griz_conv = np.fliplr(np.flipud(Gri_conv))/(c/4)
+            # aux = (params, t_sample, t_out, phi_conv, eta, psi_conv)
+            # z_ini, z_out, Griz_conv = transformG(*aux)
+            ax1 = z_ini
+            ax2 = z_out
+
+            wind = 10
+            xlim = [-0.54-wind, -0.54+wind]
+            ylim = [-0.14-wind, -0.14+wind]
+            units1 = r"Z"
+            units2 = r"cm"
+            fact = 100
+        else:
+            ax1 = t_sample
+            ax2 = t_out
+            Griz = Gri
+            # Griz_conv = Gri_conv
+            wind = 1
+            xlim = [1.2-wind, 1.2+wind]
+            ylim = [4.8-wind, 4.8+wind]
+            units1 = r"t"
+            units2 = r"ns"
+            fact = 1e9
+
+        # xi = Griz
+        # yi = Griz_conv
+        # maxi = max([np.amax(np.abs(xi)), np.amax(np.abs(yi))])
+        # rel_dif = np.abs((xi-yi))/maxi
+        # print "Maximum relative difference in Green's function:",
+        # print np.amax(rel_dif)
+
+        T, S = np.meshgrid(ax1*fact, ax2*fact)
+        plt.figure()
+        cs = plt.contourf(T, S, np.abs(Griz)**2, 256)
+        plt.axes().set_aspect("equal")
         plt.tight_layout()
         plt.colorbar(cs)
-        plt.xlabel(r"$t_{in} \ \mathrm{(ns)}$", fontsize=20)
-        plt.ylabel(r"$t_{out} \ \mathrm{(ns)}$", fontsize=20)
+        plt.xlabel(r"$"+units1+r"_{in} \ \mathrm{("+units2+")}$", fontsize=20)
+        plt.ylabel(r"$"+units1+r"_{out} \ \mathrm{("+units2+")}$", fontsize=20)
+        plt.xlim(xlim)
+        plt.ylim(ylim)
         plt.savefig(folder+name+"Greens.png", bbox_inches="tight")
         plt.close("all")
 
@@ -751,16 +879,59 @@ def greens(params, Nhg=100, plots=False, name="", folder="", verbose=False):
         plt.subplot(121)
         plt.title("singular values")
         plt.xlabel("Modes")
-        plt.bar(np.arange(Nhg+1), np.sqrt(eta))
+        plt.bar(range(Nhg), np.sqrt(eta))
         plt.subplot(122)
         plt.title("efficiencies")
         plt.xlabel("Modes")
-        plt.bar(np.arange(Nhg+1), eta)
+        plt.bar(range(Nhg), eta)
         plt.tight_layout()
         plt.savefig(folder+name+"singular_values.png", bbox_inches="tight")
         plt.close("all")
 
+    if verbose: print "Schmidt number convergence:", K_list
     return Gri, t_sample, t_out, phi, eta, psi
+
+
+def transformG(params, t_ini, t_out, phi, eta, psi):
+    r"""Transform G(t, t') into G(z, z')."""
+    t0w = params["t0w"]
+    t0r = params["t0r"]
+    tau1 = params["tau1"]
+    L = params["L"]
+    D = L*1.05
+
+    Nhg = phi.shape[0]
+    z_ini = map_to_constant_tau(-D/2, t_ini, t0w-tau1)
+    z_ini = np.array(list(reversed(z_ini)))
+    phi = np.array([list(reversed(phi[i])) for i in range(Nhg)])
+
+    # The final condition for the read-out pulse.
+    z_out = map_to_constant_tau(+D/2, t_out, t0r+tau1)
+    z_out = np.array(list(reversed(z_out)))
+    psi = np.array([list(reversed(psi[i])) for i in range(Nhg)])
+
+    phi = phi/np.sqrt(c/4)
+    psi = psi/np.sqrt(c/4)
+
+    # Norm = num_integral(z_ini, psi[0]*psi[0].conjugate())
+    # print Norm, Norm/c, c**2, np.sqrt(c)
+    # We build the Green's function again.
+
+    Greenz = np.zeros((z_out.shape[0], z_ini.shape[0]), complex)
+    for i in range(Nhg):
+        Greenz += np.sqrt(eta[i])*ket(psi[i]).dot(bra(phi[i]))
+    return z_ini, z_out, Greenz
+
+
+def map_to_constant_tau(zex, t, tau):
+    r"""Transform boundary conditions into initial conditions.
+
+    input: the constant tau value
+    zex: the value such that Om = Om(t, z=zex)
+
+    """
+    z = np.array([c*tau/2 - c*ti/2 + zex/2 for ti in t])
+    return z
 
 
 def optimize_signal(params, index=0, Nhg=5, plots=False, check=False,
