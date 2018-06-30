@@ -132,18 +132,15 @@ def solve(params, plots=False, name="", folder="", integrate_velocities=False,
         nr = params["nr"]
         USE_HG_CTRL = params["USE_HG_CTRL"]
         USE_HG_SIG = params["USE_HG_SIG"]
-        USE_SB_SIG = params["USE_SB_SIG"]
         USE_SQUARE_CTRL = params["USE_SQUARE_CTRL"]
         USE_SQUARE_SIG = params["USE_SQUARE_SIG"]
 
     if input_signal is not None:
         USE_INPUT_SIGNAL = True
         USE_HG_SIG = False
-        USE_SB_SIG = False
     else:
         USE_INPUT_SIGNAL = False
         USE_HG_SIG = params["USE_HG_SIG"]
-        USE_SB_SIG = params["USE_SB_SIG"]
     ##################################################
     # We calculate the atomic density (ignoring the atoms in the lower
     #  hyperfine state)
@@ -315,19 +312,6 @@ def solve(params, plots=False, name="", folder="", integrate_velocities=False,
         (np.log(2.0))**(0.25)/(np.pi**(0.75)*hbar*w1*np.sqrt(c*epsilon_0*tau1))
 
     if USE_HG_SIG:
-        sigma_power1 = 2*sqrt(2)*log(2)/pi / tau1
-        Omega1_peak_norm = (2**3*np.log(2.0)/np.pi)**(0.25)/np.sqrt(tau1)
-        Omega1_boundary = Omega1_boundary_HG(t_sample, 1*sigma_power1,
-                                             Omega1_peak_norm,
-                                             t0s, D, ns=ns)
-        Omega1_initial = Omega1_initial_HG(Z, 1*sigma_power1, Omega1_peak_norm,
-                                           t0s, ns=ns)
-        dtt = t_sample[1]-t_sample[0]
-        norm = sum([Omega1_boundary[i]*Omega1_boundary[i].conjugate()
-                    for i in range(len(Omega1_boundary))])*dtt
-        Omega1_boundary = Omega1_boundary/np.sqrt(norm)
-        Omega1_initial = Omega1_initial/np.sqrt(norm)
-    if USE_SB_SIG:
         sigma_power1 = 2*sqrt(2)*log(2)/pi / tau1
         Omega1_peak_norm = (2**3*np.log(2.0)/np.pi)**(0.25)/np.sqrt(tau1)
         Omega1_boundary = Omega1_boundary_HG(t_sample, 1*sigma_power1,
