@@ -24,115 +24,6 @@ from scipy.special import hermite
 from scipy.misc import factorial
 
 
-# def sb(n, x, x0, sigma):
-#     """Generate normalized Hermite-Gauss mode.
-#
-#     That is,
-#
-#     .. math::
-#         int |HG(x)|^2 dx = 1.
-#
-#     Note that for the purpose of this code, the mode is re-normalised
-#     such that the 0th order mode (the fundamental Gaussian) has a
-#     peak height of one. This renormalisation is necessary to conform
-#     to the definitions in the quantum memories code.
-#     """
-#     X = (x - x0) / sigma
-#     result = hermite(n)(X) * np.exp(-X**2) /\
-#         sqrt(factorial(n) * sqrt(pi) * 2**n * sigma)
-#     # In the next line, the renormalisation happens.
-#     result *= sqrt(sqrt(pi) * sigma)
-#     return result
-#
-#
-# def Omega2_SB(Z, ti, sigma2w, sigma2r, Omega2, t0w, t0r,
-#               alpha_rw, nw=0, nr=0):
-#     r"""Calculate the control field distribution.
-#     This function allows you to choose different energies, widths,
-#     and temporal modes for write and read pulses, respectively.
-#
-#
-#     Arguments:
-#     Z -- position axis (numpy.ndarray)
-#     ti -- current instant in time
-#     sigma2w -- spectral intensity FWHM of the write pulse
-#     sigma2r -- spectral intensity FWHM of the read pulse
-#     Omega2 -- peak Rabi frequency of the write pulse
-#     t0w -- temporal offset of the write pulse
-#     t0r -- temporal offset of the read pulse
-#     alpha_rw -- scaling between write and read pulse
-#
-#
-#     Keyword Arguments:
-#     nw -- temporal mode order of the write pulse (default: 0)
-#     nr -- temporal mode order of the read pulse (default: 0)
-#     c -- speed of light (default: 299792458 m/s)
-#
-#
-#     Return:
-#     ctrl -- numpy.ndarray containing the complex control field
-#     """
-#     c = 299792458.0
-#     tauw = sqrt(log(2)) / (pi * sigma2w)  # width of write pulse
-#     taur = sqrt(log(2)) / (pi * sigma2r)  # width of read pulse
-#     # Calculate the write pulse
-#     ctrl_w = Omega2 * sb(nw, t0w - Z / c, ti, tauw)
-#     # Calculate the read pulse
-#     ctrl_r = Omega2 * sb(nr, t0r - Z / c, ti, taur)
-#     ctrl = ctrl_w + alpha_rw * ctrl_r
-#     return ctrl
-#
-#
-# def Omega1_boundary_SB(t, sigma1, Omega1, t0s, D, ns=0):
-#     r"""Calculate the boundary conditions for the signal field.
-#
-#
-#     Arguments:
-#     t -- time axis (numpy.ndarray).
-#     sigma1 -- spectral intensity FWHM of the signal pulse.
-#     Omega1 -- peak Rabi frequency of the signal pulse.
-#     t0s -- temporal offset of the signal pulse.
-#     D -- spatial extent of the calculation.
-#
-#
-#     Keyword Arguments:
-#     ns -- temporal mode order of the signal pulse (default: 0)
-#     c -- speed of light (default: 299792458 m/s)
-#
-#
-#     Return:
-#     sig_bound -- numpy.ndarray containing the complex signal
-#     """
-#     tau = sqrt(log(2)) / (pi * sigma1)
-#     sig_bound = Omega1 * sb(ns, t, t0s - D / 2 / c, tau)
-#     return sig_bound
-#
-#
-# def Omega1_initial_SB(Z, sigma1, Omega1, t0s, ns=0):
-#     r"""Calculate the initial signal field.
-#
-#
-#     Arguments:
-#     Z -- space axis (numpy.ndarray)
-#     sigma1 -- spectral intensity FWHM of the signal pulse
-#     Omega1 -- peak Rabi frequency of the signal pulse
-#     t0s -- temporal offset of the signal pulse
-#
-#
-#     Keyword Arguments:
-#     ns -- temporal mode order of the signal pulse (default: 0)
-#     c -- speed of light (default: 299792458 m/s)
-#
-#
-#     Return:
-#     sig_init -- numpy.ndarray containing the complex initial signal
-#     """
-#     c = 299792458.0
-#     tau = sqrt(log(2)) / (pi * sigma1)
-#     sig_init = Omega1 * hg(ns, -t0s, Z / c, tau)
-#     return sig_init
-#
-
 def hg(n, x, x0, sigma):
     """Generate normalized Hermite-Gauss mode.
 
@@ -515,7 +406,7 @@ def set_parameters_ladder(custom_parameters=None, fitted_couplings=True):
                         "t0s", "t0w", "t0r",
                         "energy_pulse2", "alpha_rw", "t_cutoff",
                         "element", "isotope", "verbose",
-                        "USE_HG_CTRL", "USE_HG_SIG",
+                        "USE_HG_CTRL", "USE_HG_SIG", "USE_SB_SIG",
                         "USE_SQUARE_CTRL", "USE_SQUARE_SIG"]
 
         pm_names_dep = ["mass", "gamma21", "gamma32", "omega21", "omega32",
@@ -727,7 +618,8 @@ def set_parameters_ladder(custom_parameters=None, fitted_couplings=True):
                 "nw": 1,
                 "nr": 1,
                 "USE_HG_CTRL": False,
-                "USE_HG_SIG": False})
+                "USE_HG_SIG": False,
+                "USE_SB_SIG": False})
 
     if "USE_SQUARE_SIG" not in custom_parameters:
         pms.update({"USE_SQUARE_SIG": False})
