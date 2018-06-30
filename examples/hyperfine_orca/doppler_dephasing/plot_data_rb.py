@@ -274,11 +274,11 @@ plt.savefig("doppler_dephasing_rb1.png", bbox_inches="tight")
 plt.savefig("doppler_dephasing_rb1.pdf", bbox_inches="tight")
 
 #############################################
-plt.plot(tdelay_exp*1e9, eta_exp/amp01, "x", color=(1, 0.5, 0),
-         label=r"$\mathrm{Experiment}$", ms=5)
-plt.plot(tdelay_cont*1e9, eta_exp_cont, "-", color=(1, 0.5, 0),
-         label=r"$\eta_{\mathrm{hfs}} \ \mathrm{fit}$")
-plt.legend(loc=1, fontsize=12)
+# plt.plot(tdelay_exp*1e9, eta_exp/amp01, "x", color=(1, 0.5, 0),
+#          label=r"$\mathrm{Experiment}$", ms=5)
+# plt.plot(tdelay_cont*1e9, eta_exp_cont, "-", color=(1, 0.5, 0),
+#          label=r"$\eta_{\mathrm{hfs}} \ \mathrm{fit}$")
+# plt.legend(loc=1, fontsize=12)
 
 plt.savefig("doppler_dephasing_rb2.png", bbox_inches="tight")
 plt.savefig("doppler_dephasing_rb2.pdf", bbox_inches="tight")
@@ -294,7 +294,7 @@ plt.plot(tdelay_cont*1e9, eta_simple_cont/eta_simple_cont[0], "g-",
          label=r"$\mathrm{Theory \ (with \ pumping)}$")
 
 
-plt.xlim([0, tdelay_cont[-1]*1e9])
+# plt.xlim([0, tdelay_cont[-1]*1e9])
 plt.ylim([0, 1.02])
 plt.xlabel(r"$\tau \ \mathrm{[ns]}$", fontsize=15)
 plt.ylabel(r"$\eta_\mathrm{N}$", fontsize=15)
@@ -302,6 +302,7 @@ plt.legend(loc=1, fontsize=12)
 
 plt.savefig("doppler_dephasing_rb3.png", bbox_inches="tight")
 plt.savefig("doppler_dephasing_rb3.pdf", bbox_inches="tight")
+plt.savefig("doppler_dephasing_rb3.svg", bbox_inches="tight")
 # We save all the data.
 ###############################################################################
 continous = np.asarray([tdelay_cont, eta_hyp_cont,
