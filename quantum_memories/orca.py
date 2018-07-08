@@ -375,9 +375,15 @@ def solve(params, plots=False, name="", folder="", integrate_velocities=False,
         rhoi, Om1i = unpack_slice(yyii, Nt, Nrho, Nv, Nz)
         rhok, Om1k = rhs(rhoi, Om1i, ti, params)
         # We impose the boundary condition.
-        # dt = t_sample[1]-t_sample[0]
+        Om1_boundip1 = free_space2(t_sample[ii+1]+(-D/2 - Z[:Nempty])/c)
+        Om1_boundi = free_space2(t_sample[ii]+(-D/2 - Z[:Nempty])/c)
 
-        Om1k[0] = (Omega1_boundary[ii+1]-Omega1_boundary[ii])/dt
+        Om1k[:Nempty] = (Om1_boundip1-Om1_boundi)/dt
+
+        # if ii == 0:
+        #     Om1k[0] = (Omega1_boundary[ii+1]-Omega1_boundary[ii])/dt
+        # else:
+        #     Om1k[0] = (Omega1_boundary[ii+1]-Omega1_boundary[ii-1])/dt/2
         kk = pack_slice(rhok, Om1k, Nt_sample, Nrho, Nv, Nz)
         return kk
 
@@ -386,18 +392,16 @@ def solve(params, plots=False, name="", folder="", integrate_velocities=False,
     ti = 0.0
     rhoii = rho[0]
     Om1ii = Om1[0]
+    # The interpolator to set the boudary conditions in free-space.
+    padded = np.pad(Omega1_boundary, (0, 1), "constant",
+                    constant_values=(0.0, 0.0))[1:]
+    free_space = interpolator(t_sample, padded, kind="cubic")
+    free_space2 = interpolator(t_sample, Omega1_boundary, kind="cubic")
 
     yyii = pack_slice(rhoii, Om1ii, Nt_sample, Nrho, Nv, Nz)
-
-    # warnings.filterwarnings("error")
-
     solver = ode(f)
-    # rk4  19.73
     dt = t_sample[1]-t_sample[0]
-    # solver.set_integrator('lsoda', max_hnil=1000, ixpr=True)  # 10 min
     solver.set_integrator('dopri5')  # 6.66 s
-    # solver.set_integrator('dop853')  # 7.7936398983 s.
-    # solver.set_integrator("vode", method='bdf')  # 6.64 s
     solver.set_initial_value(yyii, ti)
     ii = 0
     while solver.successful() and ii < Nt_sample-1:
@@ -408,13 +412,17 @@ def solve(params, plots=False, name="", folder="", integrate_velocities=False,
         # print ii, Nt_sample, float(ii)/Nt_sample*100, solver.t*1e9
         # print Om1ii[: 2]
         # We impose the boundary condition.
-        Om1ii[0] = Omega1_boundary[ii+1]
+        Om1ii[:Nempty] = free_space(t_sample[ii]+(-D/2 - Z[:Nempty])/c)
         # yyii = pack_slice(rhoii, Om1ii, Nt_sample, Nrho, Nv, Nz)
 
         ii += 1
         solver.t+dt
         rho[ii] = rhoii
         Om1[ii] = Om1ii
+
+        if ii % (Nt_sample/10) == 0:
+            print ii/(Nt_sample/100), "% completed"
+    print "100 % completed."
 
     # plt.close()
     # plt.plot(t_sample, np.abs(Om1[:, 0]))
