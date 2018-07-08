@@ -24,9 +24,9 @@ from matplotlib import pyplot as plt
 from matplotlib import rcParams
 
 from misc import cheb, cDz, simple_complex_plot, set_parameters_ladder
-from misc import efficiencies, vapour_number_density
+from misc import efficiencies, empty_points, interpolator, sketch_cell
 from misc import (Omega2_HG, Omega1_initial_HG, Omega1_boundary_HG,
-                  Omega2_square)
+                  Omega2_square, cell_atomic_density)
 # from misc import Omega2_SB, Omega1_initial_SB, Omega1_boundary_SB
 from scipy.constants import physical_constants, c
 from scipy.linalg import svd
@@ -75,9 +75,13 @@ def pack_slice(rhoi, Om1i, Nt, Nrho, Nv, Nz):
 def solve(params, plots=False, name="", folder="", integrate_velocities=False,
           input_signal=None):
     r"""Solve the equations for the given parameters."""
-    def heaviside(x):
-        return np.where(x <= 0, 0.0, 1.0) + np.where(x == 0, 0.5, 0.0)
-
+    def Omega2(ti, Z, Omega2_peak, tau2, t0w, t0r, alpha_rw):
+        Om2 = Omega2_peak*np.exp(
+            -4*log(2.0)*(ti-t0w+Z/c)**2/tau2**2)
+        Om2 += Omega2_peak*np.exp(
+            -4*log(2.0)*(ti-t0r+Z/c)**2/tau2**2)*alpha_rw
+        return Om2
+    # We unpack parameters.
     if True:
         e_charge = params["e_charge"]
         hbar = params["hbar"]
@@ -134,113 +138,98 @@ def solve(params, plots=False, name="", folder="", integrate_velocities=False,
         USE_HG_SIG = params["USE_HG_SIG"]
         USE_SQUARE_CTRL = params["USE_SQUARE_CTRL"]
         USE_SQUARE_SIG = params["USE_SQUARE_SIG"]
+    # We set up runtime-flags and auxiliary parameters.
+    if True:
+        if input_signal is not None:
+            USE_INPUT_SIGNAL = True
+            USE_HG_SIG = False
+        else:
+            USE_INPUT_SIGNAL = False
+            USE_HG_SIG = params["USE_HG_SIG"]
 
-    if input_signal is not None:
-        USE_INPUT_SIGNAL = True
-        USE_HG_SIG = False
-    else:
-        USE_INPUT_SIGNAL = False
-        USE_HG_SIG = params["USE_HG_SIG"]
-    ##################################################
-    # We calculate the atomic density (ignoring the atoms in the lower
-    #  hyperfine state)
-    if element == "Rb":
-        if isotope == 85:
-            fground = [2, 3]
-        elif isotope == 87:
-            fground = [1, 2]
-    elif element == "Cs":
-        if isotope == 133:
-            fground = [3, 4]
+        # We calculate the peak Rabi frequencies
+        Omega1_peak = 4*2**(0.75)*np.sqrt(energy_pulse1)*e_charge*r1 *\
+            (np.log(2.0))**(0.25)/(np.pi**(0.75) *
+                                   hbar*w1*np.sqrt(c*epsilon_0*tau1))
 
-    n_atomic0 = vapour_number_density(Temperature, element)
-    upper_fraction = (2*fground[1]+1)/(2*fground[0]+1.0 + 2*fground[1]+1.0)
-    n_atomic0 = upper_fraction*n_atomic0
+        Omega2_peak = 4*2**(0.75)*np.sqrt(energy_pulse2)*e_charge*r2 *\
+            (np.log(2.0))**(0.25)/(np.pi**(0.75) *
+                                   hbar*w2*np.sqrt(c*epsilon_0*tau2))
 
-    # We calculate the peak Rabi frequencies
-    Omega1_peak = 4*2**(0.75)*np.sqrt(energy_pulse1)*e_charge*r1 *\
-        (np.log(2.0))**(0.25)/(np.pi**(0.75)*hbar*w1*np.sqrt(c*epsilon_0*tau1))
+        if USE_SQUARE_CTRL:
+            Omega2_peak = 4*np.sqrt(energy_pulse2)*e_charge*r2
+            Omega2_peak = Omega2_peak/(hbar*w2*np.sqrt(np.pi*c*epsilon_0*tau2))
+        if USE_SQUARE_SIG:
+            Omega1_peak = 4*np.sqrt(energy_pulse1)*e_charge*r1 /\
+                (np.sqrt(np.pi)*np.sqrt(c)*sqrt(epsilon_0)*hbar*w1)
 
-    Omega2_peak = 4*2**(0.75)*np.sqrt(energy_pulse2)*e_charge*r2 *\
-        (np.log(2.0))**(0.25)/(np.pi**(0.75)*hbar*w2*np.sqrt(c*epsilon_0*tau2))
+        if verbose >= 2:
+            print "The peak Rabi frequencies are"
+            print Omega1_peak/2/np.pi*Omega*1e-6, "MHz,",
+            print Omega2_peak/2/np.pi*Omega*1e-6, "MHz"
 
-    if USE_SQUARE_CTRL:
-        Omega2_peak = 4*np.sqrt(energy_pulse2)*e_charge*r2
-        Omega2_peak = Omega2_peak/(hbar*w2*np.sqrt(np.pi*c*epsilon_0*tau2))
-    if USE_SQUARE_SIG:
-        Omega1_peak = 4*np.sqrt(energy_pulse1)*e_charge*r1 /\
-            (np.sqrt(np.pi)*np.sqrt(c)*sqrt(epsilon_0)*hbar*w1)
+        ##################################################
+        D = 1.05 * L
+        t = np.linspace(0, T, Nt)
 
-    if verbose >= 2:
-        print "The peak Rabi frequencies are"
-        print Omega1_peak/2/np.pi*Omega*1e-6, "MHz,",
-        print Omega2_peak/2/np.pi*Omega*1e-6, "MHz"
+        # We calculate our Chebyshev matrix and mesh:
+        zL = -0.5 * D
+        cheb_diff_mat, cheb_mesh = cheb(Nz-1)
+        cheb_diff_mat = cheb_diff_mat.T / zL
+        Z = zL * cheb_mesh.T  # space axis
+        t = np.linspace(0, T, Nt)
+        dt = T/(Nt-1)
+    # We initialize the solution.
+    if True:
+        ##################################################
+        # We establish the needed functions:
+        # n_atomic(t, Z), Omega2(t, Z), and .
+        # The Maxwell-Boltzmann velocity distribution g(vZ), as given by the
+        # Temperature.
+        sigma_vZ = np.sqrt(kB*Temperature/mass)*1
+        if Nv == 1:
+            # We only consider vZ = 0.
+            vZ = np.array([0.0])
+        else:
+            vZ = np.linspace(-Nsigma*sigma_vZ, Nsigma*sigma_vZ, Nv)
 
-    ##################################################
-    D = 1.05 * L
-    t = np.linspace(0, T, Nt)
+        p = np.sqrt(1/(2*np.pi))/sigma_vZ*np.exp(-(vZ/sigma_vZ)**2/2)
+        # This is the continuous distribution. We can discretize it so that
+        # each data point represents the probability of the atom being between
+        # vZ - dvZ/2 and vZ + dvZ/2.
+        # dvZ = vZ[1]-vZ[0]
+        # p = p*dvZ/sum([p[i]*dvZ for i in range(Nv)])
+        p = p/sum([p[i] for i in range(Nv)])
 
-    # We calculate our Chebyshev matrix and mesh:
-    zL = -0.5 * D
-    cheb_diff_mat, cheb_mesh = cheb(Nz-1)
-    cheb_diff_mat = cheb_diff_mat.T / zL
-    Z = zL * cheb_mesh.T  # space axis
-    t = np.linspace(0, T, Nt)
-    dt = T/(Nt-1)
+        ##################################################
+        # We calculate the atomic density (ignoring the atoms in the lower
+        #  hyperfine state)
+        n_atomic = cell_atomic_density(element, isotope, Temperature, L, Nz,
+                                       upper_hyperfine=True)
 
-    ##################################################
-    # We establish the needed functions:
-    # n_atomic(t, Z), Omega2(t, Z), and .
-    # The Maxwell-Boltzmann velocity distribution g(vZ), as given by the
-    # Temperature.
-    sigma_vZ = np.sqrt(kB*Temperature/mass)*1
-    if Nv == 1:
-        # We only consider vZ = 0.
-        vZ = np.array([0.0])
-    else:
-        vZ = np.linspace(-Nsigma*sigma_vZ, Nsigma*sigma_vZ, Nv)
+        # The number of points in Z where there are no atoms.
+        Nempty = empty_points(n_atomic)
 
-    p = np.sqrt(1/(2*np.pi))/sigma_vZ*np.exp(-(vZ/sigma_vZ)**2/2)
-    # This is the continuous distribution. We can discretize it so that each
-    # data point represents the probability of the atom being between
-    # vZ - dvZ/2 and vZ + dvZ/2.
-    # dvZ = vZ[1]-vZ[0]
-    # p = p*dvZ/sum([p[i]*dvZ for i in range(Nv)])
-    p = p/sum([p[i] for i in range(Nv)])
-
-    # The atomic density n_atomic(t, Z)
-    n_atomic = n_atomic0*(-heaviside(Z - 0.5 * L) + heaviside(0.5 * L + Z))
-
-    ##################################################
-    # We initialize the solutions.
-    if keep_data == "all":
-        # t_sample = np.linspace(0, T, Nt)
-        t_sample = t
-        Nt_sample = Nt
-        Om1 = np.zeros((Nt_sample, Nz), complex)
-        rho = np.zeros((Nt_sample, Nrho, Nv, Nz), complex)
-    elif keep_data == "sample":
-        Nt_sample = Nt/sampling_rate
-        t_sample = np.linspace(0, T, Nt_sample)
-        Om1 = np.zeros((Nt_sample, Nz), complex)
-        rho = np.zeros((Nt_sample, Nrho, Nv, Nz), complex)
-    elif keep_data == "current":
-        # t_sample = np.zeros(1)
-        Om1 = np.zeros((1, Nz), complex)
-        rho = np.zeros((1, Nrho, Nv, Nz), complex)
-        # output = np.zeros(1, complex)
-    else:
-        raise ValueError(keep_data+" is not a valid value for keep_data.")
-
-    ##################################################
-    # The control Rabi frequency Omega(t, Z)
-    def Omega2(ti, Z, Omega2_peak, tau2, t0w, t0r, alpha_rw):
-        Om2 = Omega2_peak*np.exp(
-            -4*log(2.0)*(ti-t0w+Z/c)**2/tau2**2)
-        Om2 += Omega2_peak*np.exp(
-            -4*log(2.0)*(ti-t0r+Z/c)**2/tau2**2)*alpha_rw
-        return Om2
-
+        ##################################################
+        # We initialize the solutions.
+        if keep_data == "all":
+            # t_sample = np.linspace(0, T, Nt)
+            t_sample = t
+            Nt_sample = Nt
+            Om1 = np.zeros((Nt_sample, Nz), complex)
+            rho = np.zeros((Nt_sample, Nrho, Nv, Nz), complex)
+        elif keep_data == "sample":
+            Nt_sample = Nt/sampling_rate
+            t_sample = np.linspace(0, T, Nt_sample)
+            Om1 = np.zeros((Nt_sample, Nz), complex)
+            rho = np.zeros((Nt_sample, Nrho, Nv, Nz), complex)
+        elif keep_data == "current":
+            # t_sample = np.zeros(1)
+            Om1 = np.zeros((1, Nz), complex)
+            rho = np.zeros((1, Nrho, Nv, Nz), complex)
+            # output = np.zeros(1, complex)
+        else:
+            raise ValueError(keep_data+" is not a valid value for keep_data.")
     # We plot these functions n_atomic(t, z) and Omega2(t, z).
     if plots:
         fig, ax1 = plt.subplots()
@@ -270,89 +259,59 @@ def solve(params, plots=False, name="", folder="", integrate_velocities=False,
         plt.savefig(folder+"params_n_atomic_"+name+".png", bbox_inches="tight")
         plt.close("all")
 
-        const2 = np.pi*c*epsilon_0*hbar*(w2/e_charge/r2)**2/16.0/omega_laser2
-        if USE_HG_CTRL:
-            Om2_mesh = [Omega2_HG(Z, ti, sigma_power2, sigma_power2,
-                                  Omega2_peak, t0w, t0r,
-                                  alpha_rw, nw=nw, nr=nr) for ti in t_sample]
-        elif USE_SQUARE_CTRL:
-            Om2_mesh = [Omega2_square(Omega2_peak, Z, ti, tau2, t0w, t0r,
-                                      alpha_rw) for ti in t_sample]
-            slice_ = Omega2_square(Omega2_peak, Z, t0w, tau2, t0w, t0r,
-                                   alpha_rw)
-        else:
-            Om2_mesh = [Omega2(ti, Z, Omega2_peak, tau2, t0w, t0r, alpha_rw)
-                        for ti in t_sample]
-            slice_ = Omega2(t0w, Z, Omega2_peak, tau2, t0w, t0r, alpha_rw)
+        sketch_cell(params, folder=folder, name=name)
 
-        plt.plot(Z, slice_*1e-9/2/np.pi, "b+-")
-        plt.savefig(folder+"params_control_"+name+".png", bbox_inches="tight")
-        plt.close("all")
-
-        Om2_mesh = np.array(Om2_mesh)
-        Om2_mesh = const2*Om2_mesh**2
-
-        cp = plt.pcolormesh(Z/distance_unit*100, t_sample*Omega*1e9,
-                            Om2_mesh*1e-9)
-        plt.colorbar(cp)
-        plt.plot([-L/2/distance_unit*100, -L/2/distance_unit*100],
-                 [0, T*Omega*1e9], "r-", linewidth=1)
-        plt.plot([L/2/distance_unit*100, L/2/distance_unit*100],
-                 [0, T*Omega*1e9], "r-", linewidth=1)
-        plt.xlabel(r"$ Z \ (\mathrm{cm})$", fontsize=20)
-        plt.ylabel(r"$ t \ (\mathrm{ns})$", fontsize=20)
-        plt.savefig(folder+"params_Om2_"+name+".png", bbox_inches="tight")
-        plt.close("all")
-
-        del Om2_mesh
-
-    ##################################################
     # We establish the boundary and initial conditions.
-    Omega1_peak = 4*2**(0.75)*np.sqrt(energy_pulse1)*e_charge*r1 *\
-        (np.log(2.0))**(0.25)/(np.pi**(0.75)*hbar*w1*np.sqrt(c*epsilon_0*tau1))
+    if True:
+        Omega1_peak = 4*2**(0.75)*np.sqrt(energy_pulse1)*e_charge*r1 *\
+            (np.log(2.0))**(0.25)/(np.pi**(0.75) *
+                                   hbar*w1*np.sqrt(c*epsilon_0*tau1))
 
-    if USE_HG_SIG:
-        sigma_power1 = 2*sqrt(2)*log(2)/pi / tau1
-        Omega1_peak_norm = (2**3*np.log(2.0)/np.pi)**(0.25)/np.sqrt(tau1)
-        Omega1_boundary = Omega1_boundary_HG(t_sample, 1*sigma_power1,
-                                             Omega1_peak_norm,
-                                             t0s, D, ns=ns)
-        Omega1_initial = Omega1_initial_HG(Z, 1*sigma_power1, Omega1_peak_norm,
-                                           t0s, ns=ns)
-        dtt = t_sample[1]-t_sample[0]
-        norm = sum([Omega1_boundary[i]*Omega1_boundary[i].conjugate()
-                    for i in range(len(Omega1_boundary))])*dtt
-        Omega1_boundary = Omega1_boundary/np.sqrt(norm)
-        Omega1_initial = Omega1_initial/np.sqrt(norm)
+        if USE_HG_SIG:
+            sigma_power1 = 2*sqrt(2)*log(2)/pi / tau1
+            Omega1_peak_norm = (2**3*np.log(2.0)/np.pi)**(0.25)/np.sqrt(tau1)
+            Omega1_boundary = Omega1_boundary_HG(t_sample, 1*sigma_power1,
+                                                 Omega1_peak_norm,
+                                                 t0s, D, ns=ns)
 
-    if USE_INPUT_SIGNAL:
-        # We get the boundary by extending the input signal to
-        # account for the sampling rate.
-        # Omega1_boundary = sum([[omi]*sampling_rate
-        #                        for omi in input_signal], [])
-        Omega1_boundary = input_signal
-        Omega1_boundary = np.array(Omega1_boundary)
+            Omega1_initial = Omega1_initial_HG(Z, 1*sigma_power1,
+                                               Omega1_peak_norm,
+                                               t0s, ns=ns)
+            dtt = t_sample[1]-t_sample[0]
+            norm = sum([Omega1_boundary[i]*Omega1_boundary[i].conjugate()
+                        for i in range(len(Omega1_boundary))])*dtt
+            Omega1_boundary = Omega1_boundary/np.sqrt(norm)
+            Omega1_initial = Omega1_initial/np.sqrt(norm)
 
-        Omega1_initial = np.zeros(Nz, complex)
-    if (not USE_HG_SIG) and (not USE_INPUT_SIGNAL):
-        arg = (t_sample - t0s + D/2/c)
-        Omega1_boundary = Omega1_peak*np.exp(-4*np.log(2.0) *
-                                             arg**2/tau1**2)
-        # The signal pulse at t = 0 is
-        Omega1_initial = Omega1_peak*np.exp(-4*np.log(2.0) *
-                                            (-t0s-Z/c)**2/tau1**2)
+        if USE_INPUT_SIGNAL:
+            # We get the boundary by extending the input signal to
+            # account for the sampling rate.
+            # Omega1_boundary = sum([[omi]*sampling_rate
+            #                        for omi in input_signal], [])
+            Omega1_boundary = input_signal
+            Omega1_boundary = np.array(Omega1_boundary)
 
-    Om1[0] = Omega1_initial
+            Omega1_initial = np.zeros(Nz, complex)
+        if (not USE_HG_SIG) and (not USE_INPUT_SIGNAL):
+            arg = (t_sample - t0s + D/2/c)
+            Omega1_boundary = Omega1_peak*np.exp(-4*np.log(2.0) *
+                                                 arg**2/tau1**2)
+            # The signal pulse at t = 0 is
+            Omega1_initial = Omega1_peak*np.exp(-4*np.log(2.0) *
+                                                (-t0s-Z/c)**2/tau1**2)
 
-    # The coupling coefficient for the signal field.
-    g1 = omega_laser1*(e_charge*r1)**2/(hbar*epsilon_0)
-    # The detuning of the control field.
-    delta2 = -delta1
+        Om1[0] = Omega1_initial
+    # We pack parameters.
+    if True:
+        # The coupling coefficient for the signal field.
+        g1 = omega_laser1*(e_charge*r1)**2/(hbar*epsilon_0)
+        # The detuning of the control field.
+        delta2 = -delta1
 
-    params = (delta1, delta2, gamma21, gamma32, g1,
-              Omega2_peak, tau2, t0w, t0r, alpha_rw,
-              p, vZ, Z, n_atomic, cheb_diff_mat, c, Nv,
-              omega_laser1, omega_laser2)
+        params = (delta1, delta2, gamma21, gamma32, g1,
+                  Omega2_peak, tau2, t0w, t0r, alpha_rw,
+                  p, vZ, Z, n_atomic, cheb_diff_mat, c, Nv,
+                  omega_laser1, omega_laser2)
 
     # We define the equations that the Runge-Kutta method will solve.
 
