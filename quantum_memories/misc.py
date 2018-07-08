@@ -22,6 +22,164 @@ from settings_ladder import omega21, omega32
 from scipy.constants import k as k_B
 from scipy.special import hermite
 from scipy.misc import factorial
+from scipy.interpolate import interp1d
+
+
+def sketch_cell(params, folder="", name="sketch"):
+    r"""Plot a sketch of the cell in space-time showing control and signal \
+    fields.
+    """
+    def Omega2(ti, Z, Omega2_peak, tau2, t0w, t0r, alpha_rw):
+        Om2 = Omega2_peak*np.exp(
+            -4*log(2.0)*(ti-t0w+Z/c)**2/tau2**2)
+        Om2 += Omega2_peak*np.exp(
+            -4*log(2.0)*(ti-t0r+Z/c)**2/tau2**2)*alpha_rw
+        return Om2
+    if True:
+        USE_SQUARE_CTRL = params["USE_SQUARE_CTRL"]
+        USE_HG_CTRL = params["USE_HG_CTRL"]
+        sigma_power2 = params["sigma_power2"]
+        t0s = params["t0s"]
+        t0w = params["t0w"]
+        USE_HG_CTRL = params["USE_HG_CTRL"]
+        t0r = params["t0r"]
+        alpha_rw = params["alpha_rw"]
+        nw = params["nw"]
+        nr = params["nr"]
+        T = params["T"]
+        L = params["L"]
+        Nt = params["Nt"]/params["sampling_rate"]
+        Nz = params["Nz"]
+        tau2 = params["tau2"]
+        tau1 = params["tau1"]
+        t_cutoff = params["t_cutoff"]
+
+        Omega2_peak = 1.0
+        t_ini = np.linspace(0, T, Nt)
+        Z = build_Z_mesh(L, Nz)
+
+        if USE_HG_CTRL:
+            Om2_mesh = [Omega2_HG(Z, ti, sigma_power2, sigma_power2,
+                                  Omega2_peak, t0w, t0r,
+                                  alpha_rw, nw=nw, nr=nr) for ti in t_ini]
+        elif USE_SQUARE_CTRL:
+            Om2_mesh = [Omega2_square(Omega2_peak, Z, ti, tau2, t0w, t0r,
+                                      alpha_rw) for ti in t_ini]
+            slice_ = Omega2_square(Omega2_peak, Z, t0w, tau2, t0w, t0r,
+                                   alpha_rw)
+        else:
+            Om2_mesh = [Omega2(ti, Z, Omega2_peak, tau2, t0w, t0r, alpha_rw)
+                        for ti in t_ini]
+            slice_ = Omega2(t0w, Z, Omega2_peak, tau2, t0w, t0r, alpha_rw)
+
+        Om2_mesh = np.array(Om2_mesh)
+        Om2_mesh = Om2_mesh**2
+
+    plt.close("all")
+    cp = plt.pcolormesh(Z*100, t_ini*1e9, Om2_mesh)
+    plt.colorbar(cp)
+
+    input_signal1 = t0s-tau1/2+Z/c
+    input_signal2 = t0s+tau1/2+Z/c
+
+    output_signal1 = t0r-tau1/2+Z/c
+    output_signal2 = t0r+tau1/2+Z/c
+    plt.plot(Z*100, input_signal1*1e9, "b-")
+    plt.plot(Z*100, input_signal2*1e9, "b-")
+    plt.plot(Z*100, output_signal1*1e9, "b-")
+    plt.plot(Z*100, output_signal2*1e9, "b-")
+
+    plt.plot(Z*100, np.ones(len(Z))*t_cutoff*1e9, "g-")
+
+    plt.plot([-L/2*100, -L/2*100], [0, T*1e9], "r-", linewidth=1)
+    plt.plot([L/2*100, L/2*100], [0, T*1e9], "r-", linewidth=1)
+    plt.xlabel(r"$ Z \ (\mathrm{cm})$", fontsize=20)
+    plt.ylabel(r"$ t \ (\mathrm{ns})$", fontsize=20)
+
+    plt.xlim([Z[0]*100, Z[-1]*100])
+    plt.ylim(0, T*1e9)
+    plt.savefig(folder+"params_Om2_"+name+".png", bbox_inches="tight")
+    plt.close("all")
+
+    plt.plot(Z*100, slice_, "b+-")
+    plt.savefig(folder+"params_control_"+name+".png", bbox_inches="tight")
+    plt.close("all")
+
+
+def build_Z_mesh(L, Nz):
+    r"""Return a Z mesh for a given cell length and number of points."""
+    D = L*1.05
+    zL = -0.5 * D
+    cheb_diff_mat, cheb_mesh = cheb(Nz-1)
+    cheb_diff_mat = cheb_diff_mat.T / zL
+    Z = zL * cheb_mesh.T
+    return Z
+
+
+def heaviside(x):
+    r"""The Heaviside function."""
+    return np.where(x <= 0, 0.0, 1.0) + np.where(x == 0, 0.5, 0.0)
+
+
+def upper_hyperfine_density(element, isotope, Temperature):
+    r"""We calculate the atomic density of the upper hyperfine level."""
+    if element == "Rb":
+        if isotope == 85:
+            fground = [2, 3]
+        elif isotope == 87:
+            fground = [1, 2]
+    elif element == "Cs":
+        if isotope == 133:
+            fground = [3, 4]
+
+    n_atomic0 = vapour_number_density(Temperature, element)
+    upper_fraction = (2*fground[1]+1)/(2*fground[0]+1.0 + 2*fground[1]+1.0)
+    return upper_fraction*n_atomic0
+
+
+def cell_atomic_density(element, isotope, Temperature, L, Nz,
+                        upper_hyperfine=False):
+    r"""Return the atomic density as a function of Z."""
+    Z = build_Z_mesh(L, Nz)
+    if upper_hyperfine:
+        n_atomic0 = upper_hyperfine_density(element, isotope, Temperature)
+    else:
+        n_atomic0 = vapour_number_density(Temperature, element)
+    return n_atomic0*(-heaviside(Z - 0.5 * L) + heaviside(0.5 * L + Z))
+
+
+def empty_points(n_atomic):
+    r"""Return the number of points that are empty in a cell mesh."""
+    empty = 0
+    for i in range(len(n_atomic)):
+        if n_atomic[i] == 0.0:
+            empty += 1
+        else:
+            break
+    return empty
+
+
+def interpolator(xp, fp, kind="linear"):
+    r"""Return an interpolating function that extrapolates to zero."""
+    F = interp1d(xp, fp, kind)
+
+    def f(x):
+        if isinstance(x, np.ndarray):
+            return np.array([f(xi) for xi in x])
+        if xp[0] <= x <= xp[-1]:
+            return F(x)
+        else:
+            return 0.0
+
+    return f
+
+
+def num_integral(t, f):
+    """We integrate using the trapezium rule."""
+    dt = t[1]-t[0]
+    F = sum(f[1:-1])
+    F += (f[1] + f[-1])*0.5
+    return np.real(F*dt)
 
 
 def hg(n, x, x0, sigma):
@@ -168,6 +326,7 @@ def simple_complex_plot(x, y, f, name, amount="", modsquare=False):
     plt.colorbar(cs)
 
     plt.subplot(1, 3, 3)
+    # plt.axes().set_aspect("equal")
     plt.title(r"$|"+amount+"|^2$", fontsize=fs)
     if modsquare:
         plt.title(r"$|"+amount+"|^2$", fontsize=fs)
@@ -175,6 +334,13 @@ def simple_complex_plot(x, y, f, name, amount="", modsquare=False):
     else:
         plt.title(r"$|"+amount+"|$", fontsize=fs)
         cs = plt.pcolormesh(x, y, np.abs(f))
+
+    # Nz = len(x)
+    # for i in range(len(y)):
+    #     # print y[0], y[i], y[-1]
+    #     plt.plot(x, np.ones(Nz)*y[i], "r+", ms=5)
+
+    # plt.ylim([0.85, 0.89])
     plt.xlabel(r"$Z \ \mathrm{(cm)}$", fontsize=fs)
     plt.colorbar(cs)
 
