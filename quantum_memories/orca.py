@@ -374,7 +374,8 @@ def solve(params, plots=False, name="", folder="", integrate_velocities=False,
     def f(ti, yyii):
         rhoi, Om1i = unpack_slice(yyii, Nt, Nrho, Nv, Nz)
         rhok, Om1k = rhs(rhoi, Om1i, ti, params)
-        # We impose the boundary condition.
+        # We impose the boundary condition by taking the time derivative
+        # at point ii.
         Om1_boundip1 = free_space2(t_sample[ii+1]+(-D/2 - Z[:Nempty])/c)
         Om1_boundi = free_space2(t_sample[ii]+(-D/2 - Z[:Nempty])/c)
         Om1k[:Nempty] = (Om1_boundip1-Om1_boundi)/dt
