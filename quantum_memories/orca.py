@@ -377,17 +377,11 @@ def solve(params, plots=False, name="", folder="", integrate_velocities=False,
         # We impose the boundary condition.
         Om1_boundip1 = free_space2(t_sample[ii+1]+(-D/2 - Z[:Nempty])/c)
         Om1_boundi = free_space2(t_sample[ii]+(-D/2 - Z[:Nempty])/c)
-
         Om1k[:Nempty] = (Om1_boundip1-Om1_boundi)/dt
 
-        # if ii == 0:
-        #     Om1k[0] = (Omega1_boundary[ii+1]-Omega1_boundary[ii])/dt
-        # else:
-        #     Om1k[0] = (Omega1_boundary[ii+1]-Omega1_boundary[ii-1])/dt/2
         kk = pack_slice(rhok, Om1k, Nt_sample, Nrho, Nv, Nz)
         return kk
 
-    ii = 0
     # We carry out the Runge-Kutta method.
     ti = 0.0
     rhoii = rho[0]
