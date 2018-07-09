@@ -376,9 +376,12 @@ def solve(params, plots=False, name="", folder="", integrate_velocities=False,
         rhok, Om1k = rhs(rhoi, Om1i, ti, params)
         # We impose the boundary condition by taking the time derivative
         # at point ii.
-        Om1_boundip1 = free_space2(t_sample[ii+1]+(-D/2 - Z[:Nempty])/c)
-        Om1_boundi = free_space2(t_sample[ii]+(-D/2 - Z[:Nempty])/c)
-        Om1k[:Nempty] = (Om1_boundip1-Om1_boundi)/dt
+
+        DeltaZ = (-D/2 - Z[:Nempty])/c
+        superdt = dt*0.01
+        Om1_boundip1 = free_space(ti+superdt*0.5 + DeltaZ)
+        Om1_boundi = free_space(ti-superdt*0.5 + DeltaZ)
+        Om1k[:Nempty] = (Om1_boundip1-Om1_boundi)/superdt
 
         kk = pack_slice(rhok, Om1k, Nt_sample, Nrho, Nv, Nz)
         return kk
@@ -388,10 +391,8 @@ def solve(params, plots=False, name="", folder="", integrate_velocities=False,
     rhoii = rho[0]
     Om1ii = Om1[0]
     # The interpolator to set the boudary conditions in free-space.
-    padded = np.pad(Omega1_boundary, (0, 1), "constant",
-                    constant_values=(0.0, 0.0))[1:]
-    free_space = interpolator(t_sample, padded, kind="cubic")
-    free_space2 = interpolator(t_sample, Omega1_boundary, kind="cubic")
+    free_space = interpolator(t_sample, Omega1_boundary, kind="cubic")
+    # free_space2 = interpolator(t_sample, Omega1_boundary, kind="cubic")
 
     yyii = pack_slice(rhoii, Om1ii, Nt_sample, Nrho, Nv, Nz)
     solver = ode(f)
@@ -400,18 +401,19 @@ def solve(params, plots=False, name="", folder="", integrate_velocities=False,
     solver.set_initial_value(yyii, ti)
     ii = 0
     while solver.successful() and ii < Nt_sample-1:
-        # We advance
+        # We advance.
         solver.integrate(solver.t+dt)
         yyii = solver.y
         rhoii, Om1ii = unpack_slice(yyii, Nt, Nrho, Nv, Nz)
         # print ii, Nt_sample, float(ii)/Nt_sample*100, solver.t*1e9
         # print Om1ii[: 2]
         # We impose the boundary condition.
-        Om1ii[:Nempty] = free_space(t_sample[ii]+(-D/2 - Z[:Nempty])/c)
-        # yyii = pack_slice(rhoii, Om1ii, Nt_sample, Nrho, Nv, Nz)
 
+        # yyii = pack_slice(rhoii, Om1ii, Nt_sample, Nrho, Nv, Nz)
         ii += 1
         solver.t+dt
+
+        Om1ii[:Nempty] = free_space(t_sample[ii]+(-D/2 - Z[:Nempty])/c)
         rho[ii] = rhoii
         Om1[ii] = Om1ii
 
