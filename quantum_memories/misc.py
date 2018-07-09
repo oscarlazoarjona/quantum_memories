@@ -36,7 +36,7 @@ def get_coeffs(order, accur, direction="backward"):
     - ``order`` - an integer, the order of the derivative.
     - ``accur`` - an integer, the accurracy of the derivative.
     - ``direction`` - a string indicating the direction of the derivative, \
-    either `backward`, `central`, or `forward`. By default, `backward`.
+    either `backward`, `centered`, or `forward`. By default, `backward`.
 
     OUTPUT:
 
@@ -86,7 +86,7 @@ def get_coeffs(order, accur, direction="backward"):
     return [i for i in sol]
 
 
-def calculate_coeff_table(accur_max, numeric=True):
+def calculate_coeff_table(accur_max, direction="backward", numeric=True):
     u"""Calculate a table of coefficients for higher accurracy first order \
     backward derivatives.
 
@@ -103,41 +103,38 @@ def calculate_coeff_table(accur_max, numeric=True):
     - Either a list of lists with symbolic numbers or a numpy array.
 
     >>> from sympy import pprint
-    >>> coef_table = calculate_coeff_table(10, numeric=False)
-    >>> pprint(Matrix(coef_table))
-    ⎡ 0      0     0      0      0      0       0      0     0    -1    1  ⎤
-    ⎢                                                                      ⎥
-    ⎢ 0      0     0      0      0      0       0      0    1/2   -2   3/2 ⎥
-    ⎢                                                                      ⎥
-    ⎢ 0      0     0      0      0      0       0    -1/3   3/2   -3   11/6⎥
-    ⎢                                                                      ⎥
-    ⎢                                                                   25 ⎥
-    ⎢ 0      0     0      0      0      0      1/4   -4/3    3    -4    ── ⎥
-    ⎢                                                                   12 ⎥
-    ⎢                                                                      ⎥
-    ⎢                                                                  137 ⎥
-    ⎢ 0      0     0      0      0     -1/5    5/4   -10/3   5    -5   ─── ⎥
-    ⎢                                                                   60 ⎥
-    ⎢                                                                      ⎥
-    ⎢                                                                   49 ⎥
-    ⎢ 0      0     0      0     1/6    -6/5   15/4   -20/3  15/2  -6    ── ⎥
-    ⎢                                                                   20 ⎥
-    ⎢                                                                      ⎥
-    ⎢                                                                  363 ⎥
-    ⎢ 0      0     0     -1/7   7/6   -21/5   35/4   -35/3  21/2  -7   ─── ⎥
-    ⎢                                                                  140 ⎥
-    ⎢                                                                      ⎥
-    ⎢                                                                  761 ⎥
-    ⎢ 0      0    1/8    -8/7   14/3  -56/5   35/2   -56/3   14   -8   ─── ⎥
-    ⎢                                                                  280 ⎥
-    ⎢                                                                      ⎥
-    ⎢                                                                  7129⎥
-    ⎢ 0    -1/9   9/8   -36/7    14   -126/5  63/2    -28    18   -9   ────⎥
-    ⎢                                                                  2520⎥
-    ⎢                                                                      ⎥
-    ⎢                                                                  7381⎥
-    ⎢1/10  -10/9  45/8  -120/7   35   -252/5  105/2   -40   45/2  -10  ────⎥
-    ⎣                                                                  2520⎦
+    >>> table = calculate_coeff_table(5, numeric=False)
+    >>> pprint(table)
+    ⎡ 0     0     0     0   -1   1  ⎤
+    ⎢                               ⎥
+    ⎢ 0     0     0    1/2  -2  3/2 ⎥
+    ⎢                               ⎥
+    ⎢ 0     0   -1/3   3/2  -3  11/6⎥
+    ⎢                               ⎥
+    ⎢                            25 ⎥
+    ⎢ 0    1/4  -4/3    3   -4   ── ⎥
+    ⎢                            12 ⎥
+    ⎢                               ⎥
+    ⎢                           137 ⎥
+    ⎢-1/5  5/4  -10/3   5   -5  ─── ⎥
+    ⎣                            60 ⎦
+
+    The equivalent forward table:
+    >>> table = calculate_coeff_table(5, direction="forward", numeric=False)
+    >>> pprint(table)
+    ⎡ -1    1   0     0     0     0 ⎤
+    ⎢                               ⎥
+    ⎢-3/2   2  -1/2   0     0     0 ⎥
+    ⎢                               ⎥
+    ⎢-11/6  3  -3/2  1/3    0     0 ⎥
+    ⎢                               ⎥
+    ⎢-25                            ⎥
+    ⎢────   4   -3   4/3   -1/4   0 ⎥
+    ⎢ 12                            ⎥
+    ⎢                               ⎥
+    ⎢-137                           ⎥
+    ⎢─────  5   -5   10/3  -5/4  1/5⎥
+    ⎣  60                           ⎦
 
     >>> print calculate_coeff_table(5)
     [[ 0.          0.          0.          0.         -1.          1.        ]
@@ -146,18 +143,29 @@ def calculate_coeff_table(accur_max, numeric=True):
      [ 0.          0.25       -1.33333333  3.         -4.          2.08333333]
      [-0.2         1.25       -3.33333333  5.         -5.          2.28333333]]
 
+
     """
     order = 1
     coef_table = [[0 for ii in range(accur_max+1)] for jj in range(accur_max)]
     for i in range(1, accur_max+1):
-        tab = get_coeffs(order, i, "backward")
-        coef_table[i-1][accur_max+1-(order+i):] = tab
+        tab = get_coeffs(order, i, direction)
+        if direction == "backward":
+            coef_table[i-1][accur_max+1-(order+i):] = tab
+        elif direction == "forward":
+            coef_table[i-1][:order+i] = tab
+        elif direction == "centered":
+            s = "I hate centered tables, go make your own."
+            raise NotImplementedError(s)
+        else:
+            raise ValueError
 
     coef_table = [coef_table[jj][:accur_max+1] for jj in range(accur_max)]
     if numeric:
         coef_table = np.array([[float(coef_table[ii][jj])
                                for jj in range(accur_max+1)]
                                for ii in range(accur_max)])
+    else:
+        coef_table = Matrix(coef_table)
     return coef_table
 
 
@@ -183,13 +191,21 @@ def Dt_order_backward(f, t, coef_table, accur=1):
     return sum([coefs[j]*f[j] for j in range(accur + 1)])/dt
 
 
-def derivative_bounds(ii, accur_max):
+def derivative_bounds(ii, accur_max, Nt, direction="forward"):
     """An auxiliary function to get the bounds necessary to calculate \
     derivatives of the boundary conditions..."""
-    if ii <= accur_max:
-        return (0, ii+1)
-    else:
-        return (ii-accur_max, ii+1)
+    if direction == "forward":
+        if ii == Nt-1:
+            return (Nt-2, Nt)
+        elif ii <= Nt-accur_max:
+            return (ii, ii+accur_max+1)
+        else:
+            return (ii, Nt)
+    elif direction == "backward":
+        if ii <= accur_max:
+            return (0, ii+1)
+        else:
+            return (ii-accur_max, ii+1)
 
 
 def sketch_cell(params, folder="", name="sketch"):
