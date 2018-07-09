@@ -26,6 +26,62 @@ from scipy.interpolate import interp1d
 from sympy import Matrix, Integer
 from sympy import zeros as symb_zeros
 from sympy import factorial as symb_factorial
+from scipy.special import ai_zeros
+
+
+def optimal_mesh(n, tau, T, D):
+    r"""Get the optimal mesh for a Hermite-Gauss function."""
+    bandwidth = hg_bandwidth(n, tau)
+    dt = 1/bandwidth/10.0
+    dz = c*dt
+    Nt = int(T/dt)
+    Nz = int(D/dz)
+    return Nt, Nz
+
+
+def last_root(n):
+    r"""Get the last zero of the corresponding Hermite polynomial."""
+    # i1 = ai_zeros(1)[0][0]/-3**(-1/3.0)
+    if n < 0:
+        raise ValueError
+    if n == 0:
+        return None
+    a1 = ai_zeros(1)[0][0]/-2**(1/3.0)
+    Lam = np.sqrt(2*n+1)
+    root = Lam
+    root += (-a1)*Lam**(-1/3.0)
+    root += (-1/10.0 * a1**2) * Lam**(-5/3.0)
+    root += (9/280.0 - 11/350.0 * a1**3) * Lam**(-3.0)
+    root += (277/12600.0 * a1 - 823/63000.0 * a1**4) * Lam**(-13.0/3.0)
+    return root/np.sqrt(2*np.pi)
+
+
+def hg_bandwidth(n, tau):
+    r"""Get the bandwidth of a Hermite-Gauss function."""
+    if n == 0:
+        bandwidth = 1.0
+    else:
+        bandwidth = last_root(n)+1.0
+    bandwidth = bandwidth/tau
+    return bandwidth
+
+
+def hg_duration(n, tau):
+    r"""Get the pulse duration of a Hermite-Gauss function."""
+    return hg_bandwidth(n, tau)*tau**2*np.sqrt(2*np.pi)
+
+
+def optimal_signal_bandwidth(L, tau2):
+    r"""For given tau2 (control field duration) and L we pick the \
+    maximum bandwidth.
+    """
+    #
+    bandwidth_c = 1/tau2
+    bandwidth_L = c/L
+    bandwidth_probe = max([bandwidth_c, bandwidth_L])
+    # print "bandwidths L, control, probe:",
+    # print bandwidth_L*1e-9, bandwidth_c*1e-9, bandwidth_probe*1e-9
+    return bandwidth_probe
 
 
 def get_coeffs(order, accur, direction="backward"):

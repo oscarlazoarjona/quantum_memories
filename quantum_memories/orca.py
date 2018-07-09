@@ -26,7 +26,8 @@ from matplotlib import rcParams
 from misc import cheb, cDz, simple_complex_plot, set_parameters_ladder
 from misc import efficiencies, empty_points, interpolator, sketch_cell
 from misc import (Omega2_HG, Omega1_initial_HG, Omega1_boundary_HG,
-                  Omega2_square, cell_atomic_density)
+                  Omega2_square, cell_atomic_density, optimal_signal_bandwidth,
+                  hg_duration, optimal_mesh)
 # from misc import Omega2_SB, Omega1_initial_SB, Omega1_boundary_SB
 from scipy.constants import physical_constants, c
 from scipy.linalg import svd
@@ -450,6 +451,63 @@ def solve(params, plots=False, name="", folder="", integrate_velocities=False,
         return t_sample, Z, rho31, Om1
     else:
         return t_sample, Z, vZ, rho, Om1
+
+
+def set_parameters_ladder_greens(params):
+    r"""Set appropriate parameters to inspect a Green's function."""
+    params = params.copy()
+    L = params["L"]
+    ns = params["ns"]
+    D = L*1.05
+    tau2 = params["tau2"]
+    tau1 = 1/optimal_signal_bandwidth(L, tau2)/5.0
+
+    params["tau1"] = tau1
+    print "tau1, tau2, L/c, x:", tau1*1e9, tau2*1e9, L/c*1e9, L/tau2/c
+
+    # We find the optimal integration time T such that everything fits
+    # We need to integrate long enough that the signal has time to go through
+    # the cell, then wait some time, read-out, and wait for the signal to come
+    # out.
+    # The time at which the HG modes will be centered at the beginning of the
+    # cell should be enough so that a big mode fits completely.
+    nmax = 50
+    tmax = hg_duration(nmax, tau1)
+    t0 = tmax+2*tau1
+    # The time for the signal to reach the center of the cell
+    t0s = t0+D/c/2
+    t0w = t0s
+
+    # The time at which the control is centered in the right-end of the cell
+    t0c = t0w-D/2/c
+    if t0c < tau2/2:
+        t0 = tau2/2*1.2
+        t0s = t0+D/c/2
+        t0w = t0s
+
+    # A storage time enough so that a big mode can fit in the output bin
+    # and that transmission and output do not overlap. This is fixed across all
+    # cell lengths.
+    tstorage = 4*tmax
+    t0r = t0w + tstorage
+
+    # We place the cutoff time in the middle of the expected arrival time
+    # of the transmitted and read-out pulses
+    t_cutoff = (t0s+t0r)/2.0+D/2/c
+
+    # The total integration time is the sum of these and the time it takes
+    # for the read-out signal to exit the cell and a little extra time.
+    T = t0s + tstorage + D/c/2 + 2.5*tmax
+    Nt, Nz = optimal_mesh(ns, tau1, T, D)
+
+    params["t0s"] = t0s
+    params["t0w"] = t0w
+    params["t0r"] = t0r
+    params["t_cutoff"] = t_cutoff
+    params["T"] = T
+    params["Nt"] = Nt*10
+    params["Nz"] = Nz
+    return params
 
 
 def efficiencies_r1r2t0w(energy_pulse2, p, explicit_decoherence=None, name="",
