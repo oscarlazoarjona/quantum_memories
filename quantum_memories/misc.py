@@ -747,12 +747,24 @@ def simple_complex_plot(x, y, f, name, amount="", modsquare=False,
     plt.subplot(1, 3, 3)
     # plt.axes().set_aspect("equal")
     plt.title(r"$|"+amount+"|^2$", fontsize=fs)
+
     if modsquare:
-        plt.title(r"$|"+amount+"|^2$", fontsize=fs)
-        cs = plt.pcolormesh(x, y, np.real(f*f.conjugate()))
+        tit = r"$|"+amount+"|^2$"
+        fp = np.abs(f)**2
     else:
-        plt.title(r"$|"+amount+"|$", fontsize=fs)
-        cs = plt.pcolormesh(x, y, np.abs(f))
+        tit = r"$|"+amount+"|$"
+        fp = np.abs(f)
+
+    plt.title(tit, fontsize=fs)
+    if logplot:
+        vmin = np.amin(np.abs(fp))
+        vmax = np.amax(np.abs(fp))
+        if vmin < 1e-15:
+            vmin = 1e-15
+        norm = LogNorm(vmin=vmin, vmax=vmax)
+        cs = plt.pcolormesh(x, y, fp, norm=norm)
+    else:
+        cs = plt.pcolormesh(x, y, fp)
 
     # Nz = len(x)
     # for i in range(len(y)):
@@ -763,8 +775,9 @@ def simple_complex_plot(x, y, f, name, amount="", modsquare=False,
     plt.xlabel(r"$Z \ \mathrm{(cm)}$", fontsize=fs)
     plt.colorbar(cs)
 
-    plt.savefig(name, bbox_inches="tight")
-    plt.close("all")
+    if save_close:
+        plt.savefig(name, bbox_inches="tight")
+        plt.close("all")
 
 
 def colorize(z):
@@ -1282,13 +1295,12 @@ def set_parameters_lambda(custom_parameters=None, fitted_couplings=True):
 
 
 def efficiencies(t, Om1, params, plots=False, name="",
-                 explicit_decoherence=1.0, rabi=True):
+                 explicit_decoherence=1.0, rabi=True, plot_input_phase=False):
     r"""Calculate the efficiencies for a given solution of the signal."""
     e_charge = params["e_charge"]
     hbar = params["hbar"]
     c = params["c"]
     epsilon_0 = params["epsilon_0"]
-    Omega = params["Omega"]
     Nt = len(t)
     r1 = params["r1"]
 
@@ -1306,11 +1318,16 @@ def efficiencies(t, Om1, params, plots=False, name="",
     dphotons_out_dt = const1 * np.real(Om1[:, -1]*Om1[:, -1].conjugate())
 
     dphase_ini = np.unwrap(np.angle(Om1[:, +0]))
-    # dphase_out = np.angle(Om1[:, -1])
-    # dphase_tra = np.array([dphase_out[i] for i in range(Nt)
-    #                        if t[i] < t_cutoff])
-    # dphase_ret = np.array([dphase_out[i] for i in range(Nt)
-    #                        if t[i] > t_cutoff])
+    dphase_out = np.angle(Om1[:, -1])
+    dphase_tra = np.array([dphase_out[i] for i in range(Nt)
+                           if t[i] < t_cutoff])
+    dphase_ret = np.array([dphase_out[i] for i in range(Nt)
+                           if t[i] > t_cutoff])
+
+    dphase_ini = np.unwrap(dphase_ini)
+    dphase_tra = np.unwrap(dphase_tra)
+    dphase_ret = np.unwrap(dphase_ret)
+    dphase_ret = dphase_ret + dphase_tra[-1]
 
     dt = t[1]-t[0]
 
@@ -1327,21 +1344,22 @@ def efficiencies(t, Om1, params, plots=False, name="",
 
     if plots:
         fig, ax1 = plt.subplots()
-        ax1.plot(t*Omega*1e9, dphotons_ini_dt/Omega*1e-9, "g-",
+        ax1.plot(t*1e9, dphotons_ini_dt/1e-9, "g-",
                  label=r"$\mathrm{Signal} \ @ \ z=-D/2$")
-        ax1.plot(t_tr*Omega*1e9, dphotons_out_dt_tr/Omega*1e-9, "r-",
+        ax1.plot(t_tr*1e9, dphotons_out_dt_tr/1e-9, "r-",
                  label=r"$\mathrm{Signal} \ @ \ z=+D/2$")
-        ax1.plot(t_re*Omega*1e9, dphotons_out_dt_re/Omega*1e-9, "b-",
+        ax1.plot(t_re*1e9, dphotons_out_dt_re/1e-9, "b-",
                  label=r"$\mathrm{Signal} \ @ \ z=+D/2$")
         ax1.set_xlabel(r"$ t \ (\mathrm{ns})$", fontsize=20)
         ax1.set_ylabel(r"$ \mathrm{photons/ns}$", fontsize=20)
         plt.legend(fontsize=15)
 
         ax2 = ax1.twinx()
-        ax2.plot(t*Omega*1e9, dphase_ini*180/np.pi, "g:")
-        # ax2.plot(t_tr*Omega*1e9, dphase_tra*180/np.pi, "r:")
-        # ax2.plot(t_re*Omega*1e9, dphase_ret*180/np.pi, "b:")
-        ax2.set_ylabel(r"$ \mathrm{Phase \ (degrees)}$", fontsize=20)
+        if plot_input_phase:
+            ax2.plot(t*1e9, dphase_ini/2/np.pi, "g:")
+        ax2.plot(t_tr*1e9, dphase_tra/2/np.pi, "r:")
+        ax2.plot(t_re*1e9, dphase_ret/2/np.pi, "b:")
+        ax2.set_ylabel(r"$ \mathrm{Phase \ (revolutions)}$", fontsize=20)
 
         plt.savefig(name+"_inout.png", bbox_inches="tight")
         plt.close("all")
