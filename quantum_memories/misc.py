@@ -20,6 +20,7 @@ from matplotlib import pyplot as plt
 from colorsys import hls_to_rgb
 from settings_ladder import omega21, omega32
 from scipy.constants import k as k_B
+from scipy.constants import mu_0
 from scipy.special import hermite
 from scipy.misc import factorial
 from scipy.interpolate import interp1d
@@ -27,6 +28,8 @@ from sympy import Matrix, Integer
 from sympy import zeros as symb_zeros
 from sympy import factorial as symb_factorial
 from scipy.special import ai_zeros
+from matplotlib.colors import LogNorm
+from math import gamma as Gamma
 
 
 def optimal_mesh(n, tau, T, D):
@@ -264,16 +267,74 @@ def derivative_bounds(ii, accur_max, Nt, direction="forward"):
             return (ii-accur_max, ii+1)
 
 
+def Omega2(ti, Z, Omega2_peak, tau2, t0w, t0r, alpha_rw):
+    r"""Calculate a slice of control field."""
+    Om2 = Omega2_peak*np.exp(
+        -4*log(2.0)*(ti-t0w+Z/c)**2/tau2**2)
+    Om2 += Omega2_peak*np.exp(
+        -4*log(2.0)*(ti-t0r+Z/c)**2/tau2**2)*alpha_rw
+    return Om2
+
+
+def get_full_Om2(params):
+    """Calculate the full Control field."""
+    USE_SQUARE_CTRL = params["USE_SQUARE_CTRL"]
+    USE_HG_CTRL = params["USE_HG_CTRL"]
+    sigma_power2 = params["sigma_power2"]
+    t0w = params["t0w"]
+    USE_HG_CTRL = params["USE_HG_CTRL"]
+    t0r = params["t0r"]
+    alpha_rw = params["alpha_rw"]
+    nw = params["nw"]
+    nr = params["nr"]
+    T = params["T"]
+    L = params["L"]
+    Nt = params["Nt"]/params["sampling_rate"]
+    Nz = params["Nz"]
+    tau2 = params["tau2"]
+
+    Omega2_peak = 1.0
+    t_ini = np.linspace(0, T, Nt)
+    Z = build_Z_mesh(L, Nz)
+
+    if USE_HG_CTRL:
+        Om2_mesh = [Omega2_HG(Z, ti, sigma_power2, sigma_power2,
+                              Omega2_peak, t0w, t0r,
+                              alpha_rw, nw=nw, nr=nr) for ti in t_ini]
+    elif USE_SQUARE_CTRL:
+        Om2_mesh = [Omega2_square(Omega2_peak, Z, ti, tau2, t0w, t0r,
+                                  alpha_rw) for ti in t_ini]
+    else:
+        Om2_mesh = [Omega2(ti, Z, Omega2_peak, tau2, t0w, t0r, alpha_rw)
+                    for ti in t_ini]
+    return Om2_mesh
+
+
+def get_slice_Om2(params):
+    """Calculate the full Control field."""
+    USE_SQUARE_CTRL = params["USE_SQUARE_CTRL"]
+    t0w = params["t0w"]
+    t0r = params["t0r"]
+    alpha_rw = params["alpha_rw"]
+    L = params["L"]
+    Nz = params["Nz"]
+    tau2 = params["tau2"]
+
+    Omega2_peak = 1.0
+    Z = build_Z_mesh(L, Nz)
+
+    if USE_SQUARE_CTRL:
+        slice_ = Omega2_square(Omega2_peak, Z, t0w, tau2, t0w, t0r,
+                               alpha_rw)
+    else:
+        slice_ = Omega2(t0w, Z, Omega2_peak, tau2, t0w, t0r, alpha_rw)
+    return slice_
+
+
 def sketch_cell(params, folder="", name="sketch"):
     r"""Plot a sketch of the cell in space-time showing control and signal \
     fields.
     """
-    def Omega2(ti, Z, Omega2_peak, tau2, t0w, t0r, alpha_rw):
-        Om2 = Omega2_peak*np.exp(
-            -4*log(2.0)*(ti-t0w+Z/c)**2/tau2**2)
-        Om2 += Omega2_peak*np.exp(
-            -4*log(2.0)*(ti-t0r+Z/c)**2/tau2**2)*alpha_rw
-        return Om2
     if True:
         USE_SQUARE_CTRL = params["USE_SQUARE_CTRL"]
         USE_HG_CTRL = params["USE_HG_CTRL"]
@@ -293,7 +354,14 @@ def sketch_cell(params, folder="", name="sketch"):
         tau1 = params["tau1"]
         t_cutoff = params["t_cutoff"]
 
-        Omega2_peak = 1.0
+        energy_pulse2 = params["energy_pulse2"]
+        e_charge = params["e_charge"]
+        r2 = params["r2"]
+        w2 = params["w2"]
+        Omega2_peak = 4*2**(0.75)*np.sqrt(energy_pulse2)*e_charge*r2 *\
+            (np.log(2.0))**(0.25)/(np.pi**(0.75) *
+                                   hbar*w2*np.sqrt(c*epsilon_0*tau2))
+
         t_ini = np.linspace(0, T, Nt)
         Z = build_Z_mesh(L, Nz)
 
@@ -312,7 +380,8 @@ def sketch_cell(params, folder="", name="sketch"):
             slice_ = Omega2(t0w, Z, Omega2_peak, tau2, t0w, t0r, alpha_rw)
 
         Om2_mesh = np.array(Om2_mesh)
-        Om2_mesh = Om2_mesh**2
+        Om2_mesh = np.abs(Om2_mesh)
+        # print 111, np.amax(Om2_mesh)/2/np.pi*1e-9, Omega2_peak/2/np.pi*1e-9
 
     plt.close("all")
     cp = plt.pcolormesh(Z*100, t_ini*1e9, Om2_mesh)
@@ -353,6 +422,15 @@ def build_Z_mesh(L, Nz):
     cheb_diff_mat = cheb_diff_mat.T / zL
     Z = zL * cheb_mesh.T
     return Z
+
+
+def build_t_mesh(params):
+    r"""Return a t mesh for given parameters."""
+    T = params["T"]
+    Nt = params["Nt"]
+    sampling_rate = params["sampling_rate"]
+    Nt = Nt/sampling_rate
+    return np.linspace(0, T, Nt)
 
 
 def heaviside(x):
@@ -440,6 +518,107 @@ def hg(n, x, x0, sigma):
     # In the next line, the renormalisation happens.
     result *= sqrt(sqrt(pi) * sigma)
     return result
+
+
+def input_signal(params):
+    """Get a normalized input signal for given parameters."""
+    t0s = params["t0s"]
+    L = params["L"]
+    ns = params["ns"]
+    tau1 = params["tau1"]
+    t = build_t_mesh(params)
+    D = L*1.05
+    t00 = t0s-D/2/c
+    sigma1 = tau1/(2*np.sqrt(2.0*np.log(2.0)))
+    S = hg(ns, t, t00, sigma1)
+    return S/np.sqrt(num_integral(t, np.abs(S)**2))
+
+
+def normalized_square(t, tau):
+    r"""This is a template."""
+    f = np.where(t/tau/2 >= -0.5, 1.0, 0.0)*np.where(t/tau/2 <= 0.5, 1.0, 0.0)
+    f = f/np.sqrt(2*tau)
+    return f
+
+
+def gaussian_square(t, t0, fwhm, n=1):
+    r"""We obtain a normalized function with a given fwhm."""
+    tau = 2.0**(-1 - 1/(2.0*n))*np.log(2.0)**(-1/(2.0*n))*fwhm
+    X = (t-t0)/tau
+    norm = np.sqrt(2*tau*Gamma(1+1/2.0/n))
+    return np.exp(-X**(2*n)/2)/norm
+
+
+def input_control(params):
+    """Get the input control for given parameters."""
+    energy_pulse2 = params["energy_pulse2"]
+    e_charge = params["e_charge"]
+    t0w = params["t0w"]
+    L = params["L"]
+    nw = params["nw"]
+    tau2 = params["tau2"]
+    r2 = params["r2"]
+    w2 = params["w2"]
+    USE_HG_CTRL = params["USE_HG_CTRL"]
+    USE_SQUARE_CTRL = params["USE_SQUARE_CTRL"]
+    nw = params["nw"]
+    t = build_t_mesh(params)
+    D = L*1.05
+    t00 = t0w-D/2/c
+
+    tau = tau2/2
+    Omega_peak = 2*r2*e_charge/hbar/w2
+    Omega_peak *= np.sqrt(energy_pulse2*c*mu_0/np.pi/tau)
+
+    if USE_SQUARE_CTRL and USE_HG_CTRL:
+        n = nw+1
+        tau = 2**(-1 - 1/(2.0*n))*np.log(2.0)**(-1/(2.0*n))*tau2
+        Omega = Omega_peak*np.sqrt(tau)*gaussian_square(t, t00, tau2, n)
+
+    elif USE_HG_CTRL:
+        sigma2 = tau2/(2*np.sqrt(2.0*np.log(2.0)))
+        Omega = hg(nw, t, t00, sigma2)
+        Omega = Omega/np.sqrt(num_integral(t, np.abs(Omega)**2))
+
+    elif USE_SQUARE_CTRL:
+        tau = tau2/2
+        Omega = Omega_peak*np.sqrt(tau)*normalized_square(t-t00, tau)
+    else:
+        print 444
+
+    return Omega
+
+
+def input_control0(params):
+    """asd."""
+    # def Omega2(ti, Z, Omega2_peak, tau2, t0w, t0r, alpha_rw):
+    #     Om2 = Omega2_peak*np.exp(-4*np.log(2.0)*(ti-t0w+Z/c)**2/tau2**2)
+    #     return Om2
+
+    r2 = params["r2"]
+    energy_pulse2 = params["energy_pulse2"]
+    w2 = params["w2"]
+    tau2 = params["tau2"]
+    t0w = params["t0w"]
+    L = params["L"]
+    e_charge = params["e_charge"]
+    USE_SQUARE_CTRL = params["USE_SQUARE_CTRL"]
+
+    D = L*1.05
+    t0 = t0w-D/2/c
+    t = build_t_mesh(params)
+
+    Omega2_peak = 4*2**(0.75)*np.sqrt(energy_pulse2)*e_charge*r2 *\
+        (np.log(2.0))**(0.25)/(np.pi**(0.75) *
+                               hbar*w2*np.sqrt(c*epsilon_0*tau2))
+
+    if USE_SQUARE_CTRL:
+        Om2 = Omega2_peak/np.sqrt(tau2)*square((t-t0), tau2)
+    else:
+        Om2 = Omega2_peak*np.exp(-4*np.log(2.0)*(t-t0)**2/tau2**2)
+
+    print 333, Omega2_peak/2/np.pi*1e-9, np.amax(Om2)/2/np.pi*1e-9
+    return Om2
 
 
 def Omega2_HG(Z, ti, sigma2w, sigma2r, Omega2, t0w, t0r,
@@ -531,7 +710,7 @@ def Omega1_initial_HG(Z, sigma1, Omega1, t0s, ns=0):
 
 
 def square(t, tau):
-    r"""This is a template."""
+    r"""Return a square function of length tau."""
     f = np.where(t/tau >= -0.5, 1.0, 0.0)*np.where(t/tau <= 0.5, 1.0, 0.0)
     f = f*sqrt(tau)
     return f
@@ -546,7 +725,8 @@ def Omega2_square(Omega2, Z, ti, tau2, t0w, t0r, alpha_rw):
     return pulse
 
 
-def simple_complex_plot(x, y, f, name, amount="", modsquare=False):
+def simple_complex_plot(x, y, f, name, amount="", modsquare=False,
+                        logplot=False, save_close=True):
     """Plot the real, imaginary and mod square of a function f."""
     plt.figure(figsize=(18, 6))
     fs = 15
@@ -632,7 +812,8 @@ def cDz(fz, c, cheb_diff_mat):
     return c*np.dot(fz, cheb_diff_mat)
 
 
-def set_parameters_ladder(custom_parameters=None, fitted_couplings=True):
+def set_parameters_ladder(custom_parameters=None, fitted_couplings=True,
+                          calculate_atom=False):
     r"""Set the parameters for a ladder memory.
 
     Only completely independent parameters are taken from settings.py.
@@ -642,7 +823,7 @@ def set_parameters_ladder(custom_parameters=None, fitted_couplings=True):
     # We set the default values of independent parameters
     if True:
         # rewrite = True; rewrite = False
-        calculate_atom = False  # ; calculate_atom = True
+        # calculate_atom = False; calculate_atom = True
         # calculate_bloch = False  # ; calculate_bloch=True
         # make_smoother = True  # ; make_smoother=False
         # change_rep_rate = True  # ; change_rep_rate=False
@@ -834,14 +1015,16 @@ def set_parameters_ladder(custom_parameters=None, fitted_couplings=True):
     #########################################################################
     # We calculate dependent parameters
     if calculate_atom:
-        from fast import State, Transition, make_list_of_states
+        from fast import State, Transition, make_list_of_states, Atom
         from fast import calculate_boundaries, Integer
         from fast import calculate_matrices
-        from fast import fancy_r_plot, fancy_matrix_plot
+        # from fast import fancy_r_plot, fancy_matrix_plot
         from fast import vapour_number_density
-        from matplotlib import pyplot
+        # from matplotlib import pyplot
 
-        # atom = Atom(element, isotope)
+        atom = Atom(element, isotope)
+        mass = atom.mass
+        n_atom = atom.ground_state_n
         n_atomic0 = vapour_number_density(Temperature, element)
 
         g = State(element, isotope, n_atom, 0, 1/Integer(2))
@@ -876,19 +1059,19 @@ def set_parameters_ladder(custom_parameters=None, fitted_couplings=True):
         omega, gamma, r = calculate_matrices(magnetic_states, Omega)
 
         # We plot these matrices.
-        path = ''; name = element+str(isotope)
-        fig = pyplot.figure(); ax = fig.add_subplot(111)
-        fancy_matrix_plot(ax, omega, magnetic_states, path,
-                          name+'_omega.png',
-                          take_abs=True, colorbar=True)
-        fig = pyplot.figure(); ax = fig.add_subplot(111)
-        fancy_matrix_plot(ax, gamma, magnetic_states, path,
-                          name+'_gamma.png',
-                          take_abs=True, colorbar=True)
-        fig = pyplot.figure(); ax = fig.add_subplot(111)
-        fancy_r_plot(r, magnetic_states, path, name+'_r.png',
-                     complex_matrix=True)
-        pyplot.close("all")
+        # path = ''; name = element+str(isotope)
+        # fig = pyplot.figure(); ax = fig.add_subplot(111)
+        # fancy_matrix_plot(ax, omega, magnetic_states, path,
+        #                   name+'_omega.png',
+        #                   take_abs=True, colorbar=True)
+        # fig = pyplot.figure(); ax = fig.add_subplot(111)
+        # fancy_matrix_plot(ax, gamma, magnetic_states, path,
+        #                   name+'_gamma.png',
+        #                   take_abs=True, colorbar=True)
+        # fig = pyplot.figure(); ax = fig.add_subplot(111)
+        # fancy_r_plot(r, magnetic_states, path, name+'_r.png',
+        #              complex_matrix=True)
+        # pyplot.close("all")
 
         # We get the parameters for the simplified scheme.
         # The couplings.
@@ -960,6 +1143,7 @@ def set_parameters_ladder(custom_parameters=None, fitted_couplings=True):
             else:
                 omega21, omega32 = (2.41417562114e+15, 2.42745153053e+15)
             r1, r2 = (2.23682340192e-10, 5.48219440757e-11)
+            r1, r2 = (1.58167299508e-10, 4.47619298768e-11)
             mass = 1.44316087206e-25
             if ignore_lower_f:
                 n_atomic0 = 1.94417041886e+18
@@ -973,6 +1157,7 @@ def set_parameters_ladder(custom_parameters=None, fitted_couplings=True):
             else:
                 omega21, omega32 = (2.20993425498e+15, 2.05306135765e+15)
             r1, r2 = (2.37254506627e-10, 1.54344650829e-10)
+            r1, r2 = (1.67764270425e-10, 1.26021879628e-10)
             mass = 2.2069469161e-25
             if ignore_lower_f:
                 n_atomic0 = 4.72335166533e+18
@@ -1019,9 +1204,9 @@ def set_parameters_ladder(custom_parameters=None, fitted_couplings=True):
                 "energy_pulse2": energy_pulse2,
                 "tau1": tau1,
                 "tau2": tau2,
-                "ns": 1,
-                "nw": 1,
-                "nr": 1,
+                "ns": 0,
+                "nw": 0,
+                "nr": 0,
                 "USE_HG_CTRL": False,
                 "USE_HG_SIG": False,
                 "USE_SB_SIG": False})

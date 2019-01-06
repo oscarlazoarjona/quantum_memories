@@ -27,7 +27,7 @@ from misc import cheb, cDz, simple_complex_plot, set_parameters_ladder
 from misc import efficiencies, empty_points, interpolator, sketch_cell
 from misc import (Omega2_HG, Omega1_initial_HG, Omega1_boundary_HG,
                   Omega2_square, cell_atomic_density, optimal_signal_bandwidth,
-                  hg_duration, optimal_mesh)
+                  hg_duration, optimal_mesh, vapour_number_density)
 # from misc import Omega2_SB, Omega1_initial_SB, Omega1_boundary_SB
 from scipy.constants import physical_constants, c
 from scipy.linalg import svd
@@ -261,7 +261,6 @@ def solve(params, plots=False, name="", folder="", integrate_velocities=False,
         plt.close("all")
 
         sketch_cell(params, folder=folder, name=name)
-
     # We establish the boundary and initial conditions.
     if True:
         Omega1_peak = 4*2**(0.75)*np.sqrt(energy_pulse1)*e_charge*r1 *\
@@ -376,7 +375,7 @@ def solve(params, plots=False, name="", folder="", integrate_velocities=False,
         rhoi, Om1i = unpack_slice(yyii, Nt, Nrho, Nv, Nz)
         rhok, Om1k = rhs(rhoi, Om1i, ti, params)
         # We impose the boundary condition by taking the time derivative
-        # at point ii.
+        # at point ti.
 
         DeltaZ = (-D/2 - Z[:Nempty])/c
         superdt = dt*0.01
@@ -388,6 +387,7 @@ def solve(params, plots=False, name="", folder="", integrate_velocities=False,
         return kk
 
     # We carry out the Runge-Kutta method.
+    Nempty = 1
     ti = 0.0
     rhoii = rho[0]
     Om1ii = Om1[0]
@@ -406,21 +406,20 @@ def solve(params, plots=False, name="", folder="", integrate_velocities=False,
         solver.integrate(solver.t+dt)
         yyii = solver.y
         rhoii, Om1ii = unpack_slice(yyii, Nt, Nrho, Nv, Nz)
-        # print ii, Nt_sample, float(ii)/Nt_sample*100, solver.t*1e9
-        # print Om1ii[: 2]
-        # We impose the boundary condition.
 
-        # yyii = pack_slice(rhoii, Om1ii, Nt_sample, Nrho, Nv, Nz)
         ii += 1
         solver.t+dt
-
+        # We impose the boundary.
         Om1ii[:Nempty] = free_space(t_sample[ii]+(-D/2 - Z[:Nempty])/c)
+        # We save the calculated row.
         rho[ii] = rhoii
         Om1[ii] = Om1ii
 
-        if ii % (Nt_sample/10) == 0:
-            print ii/(Nt_sample/100), "% completed"
-    print "100 % completed."
+        if verbose != 0:
+            if ii % (Nt_sample/10) == 0:
+                print ii*100.0/Nt_sample, "% completed"
+    if verbose != 0:
+        print "100 % completed."
 
     # plt.close()
     # plt.plot(t_sample, np.abs(Om1[:, 0]))
@@ -453,6 +452,24 @@ def solve(params, plots=False, name="", folder="", integrate_velocities=False,
         return t_sample, Z, vZ, rho, Om1
 
 
+def calculate_kappa(params):
+    r"""Calculate the kappa parameter."""
+    # We calculate the number density assuming Cs 133
+    omega_laser1 = params["omega_laser1"]
+    Temperature = params["Temperature"]
+    element = params["element"]
+    r1 = params["r1"]
+    e_charge = params["e_charge"]
+    hbar = params["hbar"]
+    epsilon_0 = params["epsilon_0"]
+
+    fground = [3, 4]
+    n_atomic0 = vapour_number_density(Temperature, element)
+    upper_fraction = (2*fground[1]+1)/(2*fground[0]+1.0 + 2*fground[1]+1.0)
+    n_atomic0 = upper_fraction*n_atomic0
+    return e_charge*np.sqrt(n_atomic0*omega_laser1/(c*hbar*epsilon_0))*r1
+
+
 def set_parameters_ladder_greens(params):
     r"""Set appropriate parameters to inspect a Green's function."""
     params = params.copy()
@@ -463,7 +480,6 @@ def set_parameters_ladder_greens(params):
     tau1 = 1/optimal_signal_bandwidth(L, tau2)/5.0
 
     params["tau1"] = tau1
-    print "tau1, tau2, L/c, x:", tau1*1e9, tau2*1e9, L/c*1e9, L/tau2/c
 
     # We find the optimal integration time T such that everything fits
     # We need to integrate long enough that the signal has time to go through
