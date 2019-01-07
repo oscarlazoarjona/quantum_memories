@@ -1327,7 +1327,7 @@ def efficiencies(t, Om1, params, plots=False, name="",
     dphase_ini = np.unwrap(dphase_ini)
     dphase_tra = np.unwrap(dphase_tra)
     dphase_ret = np.unwrap(dphase_ret)
-    dphase_ret = dphase_ret + dphase_tra[-1]
+    dphase_ret = dphase_ret + dphase_tra[-1] - dphase_ret[0]
 
     dt = t[1]-t[0]
 
@@ -1362,6 +1362,27 @@ def efficiencies(t, Om1, params, plots=False, name="",
         ax2.set_ylabel(r"$ \mathrm{Phase \ (revolutions)}$", fontsize=20)
 
         plt.savefig(name+"_inout.png", bbox_inches="tight")
+        plt.close("all")
+        #########################################################
+        fig, ax1 = plt.subplots()
+        ax1.semilogy(t*1e9, dphotons_ini_dt/1e-9, "g-",
+                     label=r"$\mathrm{Signal} \ @ \ z=-D/2$")
+        ax1.semilogy(t_tr*1e9, dphotons_out_dt_tr/1e-9, "r-",
+                     label=r"$\mathrm{Signal} \ @ \ z=+D/2$")
+        ax1.semilogy(t_re*1e9, dphotons_out_dt_re/1e-9, "b-",
+                     label=r"$\mathrm{Signal} \ @ \ z=+D/2$")
+        ax1.set_xlabel(r"$ t \ (\mathrm{ns})$", fontsize=20)
+        ax1.set_ylabel(r"$ \mathrm{photons/ns}$", fontsize=20)
+        plt.legend(fontsize=15)
+
+        ax2 = ax1.twinx()
+        if plot_input_phase:
+            ax2.plot(t*1e9, dphase_ini/2/np.pi, "g:")
+        ax2.plot(t_tr*1e9, dphase_tra/2/np.pi, "r:")
+        ax2.plot(t_re*1e9, dphase_ret/2/np.pi, "b:")
+        ax2.set_ylabel(r"$ \mathrm{Phase \ (revolutions)}$", fontsize=20)
+
+        plt.savefig(name+"_inout_log.png", bbox_inches="tight")
         plt.close("all")
 
     Ntr = sum([dphotons_out_dt[i] for i in range(Nt)
