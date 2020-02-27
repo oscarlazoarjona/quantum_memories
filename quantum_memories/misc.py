@@ -9,8 +9,8 @@
 
 References:
     [1] https://arxiv.org/abs/1704.00013
-"""
 
+"""
 
 from math import pi, sqrt, log
 from scipy.constants import physical_constants, c, hbar, epsilon_0
@@ -88,7 +88,7 @@ def optimal_signal_bandwidth(L, tau2):
 
 
 def get_coeffs(order, accur, direction="backward"):
-    """The coefficients of a discrete derivative.
+    r"""The coefficients of a discrete derivative.
 
     INPUT:
 
@@ -359,9 +359,9 @@ def sketch_cell(params, folder="", name="sketch"):
         r2 = params["r2"]
         w2 = params["w2"]
         Omega2_peak = 4*2**(0.75)*np.sqrt(energy_pulse2)*e_charge*r2 *\
-            (np.log(2.0))**(0.25)/(np.pi**(0.75) *
-                                   hbar*w2*np.sqrt(c*epsilon_0*tau2))
-
+            (np.log(2.0))**(0.25)
+        aux = (np.pi**(0.75) * hbar*w2*np.sqrt(c*epsilon_0*tau2))
+        Omega2_peak = Omega2_peak/aux
         t_ini = np.linspace(0, T, Nt)
         Z = build_Z_mesh(L, Nz)
 
@@ -608,9 +608,9 @@ def input_control0(params):
     t0 = t0w-D/2/c
     t = build_t_mesh(params)
 
+    aux = (np.pi**(0.75) * hbar*w2*np.sqrt(c*epsilon_0*tau2))
     Omega2_peak = 4*2**(0.75)*np.sqrt(energy_pulse2)*e_charge*r2 *\
-        (np.log(2.0))**(0.25)/(np.pi**(0.75) *
-                               hbar*w2*np.sqrt(c*epsilon_0*tau2))
+        (np.log(2.0))**(0.25)/aux
 
     if USE_SQUARE_CTRL:
         Om2 = Omega2_peak/np.sqrt(tau2)*square((t-t0), tau2)
@@ -726,7 +726,7 @@ def Omega2_square(Omega2, Z, ti, tau2, t0w, t0r, alpha_rw):
 
 
 def simple_complex_plot(x, y, f, name, amount="", modsquare=False,
-                        logplot=False, save_close=True):
+                        logplot=False, save_close=True, figsize=(18, 6)):
     """Plot the real, imaginary and mod square of a function f."""
     plt.figure(figsize=(18, 6))
     fs = 15
@@ -789,11 +789,11 @@ def colorize(z):
     r = np.abs(z)
     arg = np.angle(z)
 
-    h = (arg + pi) / (2 * pi) + 0.5
-    l = 1.0 - 1.0/(1.0 + r**0.3)
-    s = 0.8
+    H = (arg + pi) / (2 * pi) + 0.5
+    L = 1.0 - 1.0/(1.0 + r**0.3)
+    S = 0.8
 
-    c = np.vectorize(hls_to_rgb)(h, l, s)  # --> tuple
+    c = np.vectorize(hls_to_rgb)(H, L, S)  # --> tuple
     c = np.array(c)  # -->  array of (3,n,m) shape, but need (n,m,3)
     c = c.swapaxes(0, 2)
     return c
@@ -1297,25 +1297,27 @@ def set_parameters_lambda(custom_parameters=None, fitted_couplings=True):
 def efficiencies(t, Om1, params, plots=False, name="",
                  explicit_decoherence=1.0, rabi=True, plot_input_phase=False):
     r"""Calculate the efficiencies for a given solution of the signal."""
-    e_charge = params["e_charge"]
-    hbar = params["hbar"]
-    c = params["c"]
-    epsilon_0 = params["epsilon_0"]
+    # e_charge = params["e_charge"]
+    # hbar = params["hbar"]
+    # c = params["c"]
+    # epsilon_0 = params["epsilon_0"]
     Nt = len(t)
-    r1 = params["r1"]
+    # r1 = params["r1"]
 
-    omega_laser1 = params["omega_laser1"]
-    w1 = params["w1"]
+    # omega_laser1 = params["omega_laser1"]
+    # w1 = params["w1"]
     t_cutoff = params["t_cutoff"]
 
     # We calculate the number of photons.
-    if rabi:
-        const1 = np.pi*c*epsilon_0*hbar*(w1/e_charge/r1)**2/16.0/omega_laser1
-    else:
-        const1 = np.pi*c*epsilon_0*(w1)**2/16.0/hbar/omega_laser1
+    # if rabi:
+    #     const1 = np.pi*c*epsilon_0*hbar*(w1/e_charge/r1)**2/16.0/omega_laser1
+    # else:
+    #     const1 = np.pi*c*epsilon_0*(w1)**2/16.0/hbar/omega_laser1
 
-    dphotons_ini_dt = const1 * np.real(Om1[:, +0]*Om1[:, +0].conjugate())
-    dphotons_out_dt = const1 * np.real(Om1[:, -1]*Om1[:, -1].conjugate())
+    # dphotons_ini_dt = const1 * np.real(Om1[:, +0]*Om1[:, +0].conjugate())
+    # dphotons_out_dt = const1 * np.real(Om1[:, -1]*Om1[:, -1].conjugate())
+    dphotons_ini_dt = np.abs(Om1[:, +0])**2
+    dphotons_out_dt = np.abs(Om1[:, -1])**2
 
     dphase_ini = np.unwrap(np.angle(Om1[:, +0]))
     dphase_out = np.angle(Om1[:, -1])
@@ -1342,13 +1344,21 @@ def efficiencies(t, Om1, params, plots=False, name="",
     dphotons_out_dt_tr = np.array(dphotons_out_dt_tr)
     dphotons_out_dt_re = np.array(dphotons_out_dt_re)*explicit_decoherence
 
+    # norm = np.sqrt(num_integral(t, np.abs(dphotons_ini_dt)**2))
+    # dphotons_ini_dt = dphotons_ini_dt/norm
+    # norm = np.sqrt(num_integral(t, np.abs(dphotons_out_dt_tr)**2))
+    # dphotons_out_dt_tr = dphotons_out_dt_tr/norm
+    # norm = np.sqrt(num_integral(t, np.abs(dphotons_out_dt_re)**2))
+    # dphotons_out_dt_re = dphotons_out_dt_re/norm
+
     if plots:
         fig, ax1 = plt.subplots()
-        ax1.plot(t*1e9, dphotons_ini_dt/1e-9, "g-",
+        fact = 1e-9
+        ax1.plot(t*1e9, np.abs(dphotons_ini_dt)*fact, "g-",
                  label=r"$\mathrm{Signal} \ @ \ z=-D/2$")
-        ax1.plot(t_tr*1e9, dphotons_out_dt_tr/1e-9, "r-",
+        ax1.plot(t_tr*1e9, np.abs(dphotons_out_dt_tr)*fact, "r-",
                  label=r"$\mathrm{Signal} \ @ \ z=+D/2$")
-        ax1.plot(t_re*1e9, dphotons_out_dt_re/1e-9, "b-",
+        ax1.plot(t_re*1e9, np.abs(dphotons_out_dt_re)*fact, "b-",
                  label=r"$\mathrm{Signal} \ @ \ z=+D/2$")
         ax1.set_xlabel(r"$ t \ (\mathrm{ns})$", fontsize=20)
         ax1.set_ylabel(r"$ \mathrm{photons/ns}$", fontsize=20)
@@ -1365,14 +1375,15 @@ def efficiencies(t, Om1, params, plots=False, name="",
         plt.close("all")
         #########################################################
         fig, ax1 = plt.subplots()
-        ax1.semilogy(t*1e9, dphotons_ini_dt/1e-9, "g-",
+        ax1.semilogy(t*1e9, np.abs(dphotons_ini_dt)*fact, "g-",
                      label=r"$\mathrm{Signal} \ @ \ z=-D/2$")
-        ax1.semilogy(t_tr*1e9, dphotons_out_dt_tr/1e-9, "r-",
+        ax1.semilogy(t_tr*1e9, np.abs(dphotons_out_dt_tr)*fact, "r-",
                      label=r"$\mathrm{Signal} \ @ \ z=+D/2$")
-        ax1.semilogy(t_re*1e9, dphotons_out_dt_re/1e-9, "b-",
+        ax1.semilogy(t_re*1e9, np.abs(dphotons_out_dt_re)*fact, "b-",
                      label=r"$\mathrm{Signal} \ @ \ z=+D/2$")
         ax1.set_xlabel(r"$ t \ (\mathrm{ns})$", fontsize=20)
         ax1.set_ylabel(r"$ \mathrm{photons/ns}$", fontsize=20)
+        # ax1.set_ylim(1e-11, 1e0)
         plt.legend(fontsize=15)
 
         ax2 = ax1.twinx()
@@ -1381,7 +1392,7 @@ def efficiencies(t, Om1, params, plots=False, name="",
         ax2.plot(t_tr*1e9, dphase_tra/2/np.pi, "r:")
         ax2.plot(t_re*1e9, dphase_ret/2/np.pi, "b:")
         ax2.set_ylabel(r"$ \mathrm{Phase \ (revolutions)}$", fontsize=20)
-
+        ax1.set_ylim(1e-26, 1e4)
         plt.savefig(name+"_inout_log.png", bbox_inches="tight")
         plt.close("all")
 
@@ -1443,6 +1454,7 @@ def vapour_pressure(Temperature, element):
         http://steck.us/alkalidata (revision 2.1.5, 19 September 2012).
     [3] Daniel A. Steck, "Rubidium 87 D Line Data," available online at
         http://steck.us/alkalidata (revision 2.1.5, 19 September 2012).
+
     """
     if element == "Rb":
         Tmelt = 39.30+273.15  # K.
