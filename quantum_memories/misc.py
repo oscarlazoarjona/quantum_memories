@@ -726,16 +726,19 @@ def Omega2_square(Omega2, Z, ti, tau2, t0w, t0r, alpha_rw):
 
 
 def simple_complex_plot(x, y, f, name, amount="", modsquare=False,
-                        logplot=False, save_close=True, figsize=(18, 6)):
+                        logplot=False, save_close=True, figsize=(18, 6),
+                        tau_label=True):
     """Plot the real, imaginary and mod square of a function f."""
-    plt.figure(figsize=(18, 6))
+    plt.figure(figsize=figsize)
     fs = 15
 
     plt.subplot(1, 3, 1)
     plt.title(r"$ \mathfrak{Re}"+amount+"$", fontsize=fs)
     cs = plt.pcolormesh(x, y, np.real(f))
     plt.xlabel(r"$Z \ \mathrm{(cm)}$", fontsize=fs)
-    plt.ylabel(r"$t \ \mathrm{(ns)}$", fontsize=fs)
+    plt.ylabel(r"$\tau \ \mathrm{(ns)}$", fontsize=fs)
+    if not tau_label:
+        plt.ylabel(r"$t \ \mathrm{(ns)}$", fontsize=fs)
     plt.colorbar(cs)
 
     plt.subplot(1, 3, 2)

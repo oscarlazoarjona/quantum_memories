@@ -16,6 +16,7 @@ be analysed by various other functions.
 
 References:
     [1] https://arxiv.org/abs/1704.00013
+
 """
 
 import numpy as np
@@ -638,12 +639,12 @@ def rescale_input(t, mode, params):
 
 
 def bra(v):
-    """"Get a bra from an array."""
+    """Get a bra from an array."""
     return v.reshape((1, len(v))).conjugate()
 
 
 def ket(v):
-    """"Get a ket from an array."""
+    """Get a ket from an array."""
     return v.reshape((len(v), 1))
 
 
