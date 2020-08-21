@@ -10,14 +10,14 @@ from __future__ import print_function
 from pickle import dump
 import numpy as np
 from matplotlib import pyplot as plt
-from orca_memories import (time_bandwith_product, set_parameters_ladder,
-                           calculate_pulse_energy, print_params,
-                           build_mesh_fdm, sketch_frame_transform,
-                           calculate_xi0, calculate_F,
-                           calculate_optimal_input_xi, num_integral,
-                           calculate_optimal_input_Z,
-                           calculate_optimal_input_tau,
-                           solve_fdm)
+from quantum_memories import (time_bandwith_product, set_parameters_ladder,
+                              calculate_pulse_energy, print_params,
+                              build_mesh_fdm, sketch_frame_transform,
+                              calculate_xi0, calculate_F,
+                              calculate_optimal_input_xi, num_integral,
+                              calculate_optimal_input_Z,
+                              calculate_optimal_input_tau,
+                              solve_fdm)
 from scipy.constants import c
 
 # We establish base parameters.
