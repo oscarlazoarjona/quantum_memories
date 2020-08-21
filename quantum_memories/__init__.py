@@ -10,7 +10,8 @@ quantum memories, and calculations using them.
 __version__ = "1.0"
 
 
-from misc import time_bandwith_product, build_mesh_fdm
+from misc import (time_bandwith_product, build_mesh_fdm, rayleigh_range,
+                  rel_error, glo_error)
 from orca import (set_parameters_ladder,
                   calculate_pulse_energy, print_params,
                   calculate_xi0, calculate_F,
