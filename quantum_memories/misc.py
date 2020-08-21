@@ -4,6 +4,7 @@
 # mailto: oscar.lazoarjona@physics.ox.ac.uk
 r"""Miscellaneous routines."""
 import numpy as np
+import warnings
 from scipy.interpolate import interp1d
 from numpy import sinc as normalized_sinc
 from scipy.special import hermite
@@ -11,94 +12,6 @@ from scipy.misc import factorial
 from sympy import log, pi
 from scipy.constants import k as k_B
 from scipy.constants import c
-
-
-def build_t_mesh(params, uniform=True, return_bounds=False):
-    r"""Build a variable density mesh for the time axis.
-
-    We ensure that within three fwhm there are a tenth of the
-    points, or at least 200.
-    """
-    Nfwhms = 2.0
-    Nleast = 100
-    fra = 0.01
-    Nt = params["Nt"]
-    T = params["T"]
-    t0w = params["t0w"]
-    t0r = params["t0r"]
-    tauw = params["tauw"]
-    taur = params["taur"]
-
-    if uniform:
-        return np.linspace(-T/2, T/2, Nt)
-
-    # We determine how many points go in each control field region.
-    Nw = int(fra*Nt); Nr = int(fra*Nt)
-    if Nw < Nleast: Nw = Nleast
-    if Nr < Nleast: Nr = Nleast
-
-    # The density outside these regions should be uniform.
-    Trem = T - Nfwhms*tauw - Nfwhms*taur
-    Nrem = Nt - Nw - Nr
-
-    t01 = 0.0; tf1 = t0w-Nfwhms*tauw/2
-    t02 = t0w+Nfwhms*tauw/2; tf2 = t0r-Nfwhms*taur/2
-    t03 = t0r+Nfwhms*taur/2; tf3 = T
-
-    T1 = tf1 - t01
-    T2 = tf2 - t02
-    T3 = tf3 - t03
-
-    N1 = int(Nrem*T1/Trem)
-    N2 = int(Nrem*T2/Trem)
-    N3 = int(Nrem*T3/Trem)
-    # We must make sure that these numbers all add up to Nt
-    Nt_wrong = N1-1 + Nw + N2-2 + Nr + N3-1
-    # print N1, Nw, N2, Nr, N3
-    # print Nt, Nt_wrong
-    # We correct this error:
-    N2 = N2 + Nt - Nt_wrong
-    Nt_wrong = N1-1 + Nw + N2-2 + Nr + N3-1
-
-    tw = np.linspace(t0w - Nfwhms*tauw/2, t0w + Nfwhms*tauw/2, Nw)
-    tr = np.linspace(t0r - Nfwhms*taur/2, t0r + Nfwhms*taur/2, Nr)
-    t1 = np.linspace(t01, tf1, N1)
-    t2 = np.linspace(t02, tf2, N2)
-    t3 = np.linspace(t03, tf3, N3)
-
-    t = np.zeros(Nt)
-    t[:N1-1] = t1[:-1]
-
-    a1 = 0; b1 = N1-1
-    aw = b1; bw = aw+Nw
-    a2 = bw; b2 = a2+N2-2
-    ar = b2; br = ar+Nr
-    a3 = br; b3 = a3+N3-1
-
-    t[a1:b1] = t1[:-1]
-    t[aw:bw] = tw
-    t[a2:b2] = t2[1:-1]
-    t[ar:br] = tr
-    t[a3:b3] = t3[1:]
-
-    # print t[a1:b1].shape, t[aw:bw].shape, t[a2:b2].shape, t[ar:br].shape,
-    # print t[a3:b3].shape
-
-    if return_bounds:
-        return (a1, aw, a2, ar, a3)
-    return t
-
-
-def build_Z_mesh(params, uniform=True, on_cell_edge=False):
-    r"""Return a Z mesh for a given cell length and number of points."""
-    L = params["L"]
-    Nz = params["Nz"]
-    if on_cell_edge:
-        D = L*1.0
-    else:
-        D = L*1.05
-    Z = np.linspace(-D/2, D/2, Nz)
-    return Z
 
 
 def rel_error(a, b):
@@ -325,3 +238,203 @@ def rayleigh_range(params):
     lamc = c/(params["omega32"]/2/np.pi)
 
     return np.pi*ws**2/lams, np.pi*wc**2/lamc
+
+##############################################################################
+# Finite difference miscellaneous routines.
+
+
+def build_t_mesh(params, uniform=True, return_bounds=False):
+    r"""Build a variable density mesh for the time axis.
+
+    We ensure that within three fwhm there are a tenth of the
+    points, or at least 200.
+    """
+    Nfwhms = 2.0
+    Nleast = 100
+    fra = 0.01
+    Nt = params["Nt"]
+    T = params["T"]
+    t0w = params["t0w"]
+    t0r = params["t0r"]
+    tauw = params["tauw"]
+    taur = params["taur"]
+
+    if uniform:
+        return np.linspace(-T/2, T/2, Nt)
+
+    # We determine how many points go in each control field region.
+    Nw = int(fra*Nt); Nr = int(fra*Nt)
+    if Nw < Nleast: Nw = Nleast
+    if Nr < Nleast: Nr = Nleast
+
+    # The density outside these regions should be uniform.
+    Trem = T - Nfwhms*tauw - Nfwhms*taur
+    Nrem = Nt - Nw - Nr
+
+    t01 = 0.0; tf1 = t0w-Nfwhms*tauw/2
+    t02 = t0w+Nfwhms*tauw/2; tf2 = t0r-Nfwhms*taur/2
+    t03 = t0r+Nfwhms*taur/2; tf3 = T
+
+    T1 = tf1 - t01
+    T2 = tf2 - t02
+    T3 = tf3 - t03
+
+    N1 = int(Nrem*T1/Trem)
+    N2 = int(Nrem*T2/Trem)
+    N3 = int(Nrem*T3/Trem)
+    # We must make sure that these numbers all add up to Nt
+    Nt_wrong = N1-1 + Nw + N2-2 + Nr + N3-1
+    # print N1, Nw, N2, Nr, N3
+    # print Nt, Nt_wrong
+    # We correct this error:
+    N2 = N2 + Nt - Nt_wrong
+    Nt_wrong = N1-1 + Nw + N2-2 + Nr + N3-1
+
+    tw = np.linspace(t0w - Nfwhms*tauw/2, t0w + Nfwhms*tauw/2, Nw)
+    tr = np.linspace(t0r - Nfwhms*taur/2, t0r + Nfwhms*taur/2, Nr)
+    t1 = np.linspace(t01, tf1, N1)
+    t2 = np.linspace(t02, tf2, N2)
+    t3 = np.linspace(t03, tf3, N3)
+
+    t = np.zeros(Nt)
+    t[:N1-1] = t1[:-1]
+
+    a1 = 0; b1 = N1-1
+    aw = b1; bw = aw+Nw
+    a2 = bw; b2 = a2+N2-2
+    ar = b2; br = ar+Nr
+    a3 = br; b3 = a3+N3-1
+
+    t[a1:b1] = t1[:-1]
+    t[aw:bw] = tw
+    t[a2:b2] = t2[1:-1]
+    t[ar:br] = tr
+    t[a3:b3] = t3[1:]
+
+    # print t[a1:b1].shape, t[aw:bw].shape, t[a2:b2].shape, t[ar:br].shape,
+    # print t[a3:b3].shape
+
+    if return_bounds:
+        return (a1, aw, a2, ar, a3)
+    return t
+
+
+def build_Z_mesh(params, uniform=True, on_cell_edge=False):
+    r"""Return a Z mesh for a given cell length and number of points."""
+    L = params["L"]
+    Nz = params["Nz"]
+    if on_cell_edge:
+        D = L*1.0
+    else:
+        D = L*1.05
+    Z = np.linspace(-D/2, D/2, Nz)
+    return Z
+
+
+def build_mesh_fdm(params, verbose=0):
+    r"""Build mesh for the FDM in the control field region.
+
+    We choose a mesh such that the region where the cell overlaps with the
+    control field has approximately `N**2` points, the time and space
+    steps satisfy approximately dz/dtau = c/2, and length in time of the mesh
+    is duration `params["T"]*ntau`.
+
+    """
+    tauw = params["tauw"]
+    ntauw = params["ntauw"]
+    N = params["N"]
+    Z = build_Z_mesh(params)
+    D = Z[-1] - Z[0]
+    # We calculate NtOmega and Nz such that we have approximately
+    # NtOmega
+    NtOmega = int(round(N*np.sqrt(c*ntauw*tauw/2/D)))
+    Nz = int(round(N*np.sqrt(2*D/c/ntauw/tauw)))
+
+    dt = ntauw*tauw/(NtOmega-1)
+    # We calculate a t0w that is approximately at 3/2*ntauw*tauw + 2*D/c
+    Nt1 = int(round((ntauw*tauw + 2*D/c)/dt))+1
+
+    t01 = 0.0; tf1 = t01 + (Nt1-1)*dt
+    t02 = tf1; tf2 = t02 + (NtOmega-1)*dt
+    t03 = tf2; tf3 = t03 + (Nt1-1)*dt
+    t0w = (tf2 + t02)/2
+
+    t01 -= t0w; tf1 -= t0w
+    t02 -= t0w; tf2 -= t0w
+    t03 -= t0w; tf3 -= t0w
+    t0w = 0.0
+
+    tau1 = np.linspace(t01, tf1, Nt1)
+    tau2 = np.linspace(t02, tf2, NtOmega)
+    tau3 = np.linspace(t03, tf3, Nt1)
+
+    Nt = 2*Nt1 + NtOmega - 2
+    T = tf3-t01
+    tau = np.linspace(t01, tf3, Nt)
+    Z = build_Z_mesh(params)
+
+    params_new = params.copy()
+    params_new["Nt"] = Nt
+    params_new["Nz"] = Nz
+    params_new["T"] = T
+    params_new["t0w"] = t0w
+    params_new["t0s"] = t0w
+    Z = build_Z_mesh(params_new)
+
+    if verbose > 0:
+        Nt1 = tau1.shape[0]
+        Nt2 = tau2.shape[0]
+        Nt3 = tau3.shape[0]
+        T1 = tau1[-1] - tau1[0]
+        T2 = tau2[-1] - tau2[0]
+        T3 = tau3[-1] - tau3[0]
+        T1_tar = ntauw*tauw + 2*D/c
+        # dt1 = tau1[1] - tau1[0]
+        # dt2 = tau2[1] - tau2[0]
+        # dt3 = tau3[1] - tau3[0]
+
+        aux1 = Nt1+Nt2+Nt3-2
+        total_size = aux1*Nz
+        aux2 = [Nt1, Nt2, Nt3, Nz, aux1, Nz, total_size]
+        mes = "Grid size: ({} + {} + {}) x {} = {} x {} = {} points"
+        print(mes.format(*aux2))
+
+        dz = Z[1]-Z[0]
+        dt = tau[1]-tau[0]
+
+        ratio1 = float(NtOmega)/float(Nz)
+        ratio2 = float(Nz)/float(NtOmega)
+
+        mes = "The control field region has {} x {} = {} =? {} points"
+        print(mes.format(Nt2, Nz, Nt2*Nz, N**2))
+        mes = "The W matrix would be (5 x 2 x Nz)^2 = {} x {} = {} points"
+        NW = 2*5*Nz
+        print(mes.format(NW, NW, NW**2))
+        mes = "The ratio of steps is (dz/dt)/(c/2) = {:.3f}"
+        print(mes.format(dz/dt/(c/2)))
+        aux = [T1/tauw, T2/tauw, T3/tauw]
+        mes = "T1/tauw, T3/tauw, T3/tauw : {:.3f}, {:.3f}, {:.3f}"
+        print(mes.format(*aux))
+        mes = "T1/T1_tar, T3/T1_tar: {:.3f}, {:.3f}"
+        print(mes.format(T1/T1_tar, T3/T1_tar))
+
+        # aux = [dt1*1e9, dt2*1e9, dt3*1e9]
+        # print("dt1, dt2, dt3 : {} {} {}".format(*aux))
+
+        if total_size > 1.3e6:
+            mes = "The mesh size is larger than 1.3 million, the computer"
+            mes += " might crash!"
+            warnings.warn(mes)
+        if ratio1 > 15:
+            mes = "There are too many t-points in the control region: {}"
+            mes = mes.format(NtOmega)
+            warnings.warn(mes)
+        if ratio2 > 15:
+            mes = "There are too many Z-points in the control region, "
+            mes = "the computer might crash!"
+            warnings.warn(mes)
+        if Nz > 500:
+            mes = "There are too many Z-points! I'll prevent this from "
+            mes += "crashing."
+            raise ValueError(mes)
+    return params_new, Z, tau, tau1, tau2, tau3

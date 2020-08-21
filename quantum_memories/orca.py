@@ -3,14 +3,25 @@
 # Copyright (C) 2020 Oscar Gerardo Lazo Arjona
 # mailto: oscar.lazoarjona@physics.ox.ac.uk
 r"""Orca related routines."""
+from time import time
 import warnings
 import numpy as np
 from scipy.constants import physical_constants, c, hbar, epsilon_0, mu_0
+from scipy.sparse import linalg, csr_matrix, spdiags
+from scipy.sparse import eye as sp_eye
+from scipy.sparse import kron as sp_kron
+
+from matplotlib import pyplot as plt
 from sympy import oo
 
 from misc import (time_bandwith_product, vapour_number_density, rayleigh_range,
                   ffftfreq, iffftfft, interpolator, sinc, hermite_gauss,
-                  num_integral, build_Z_mesh, build_t_mesh)
+                  num_integral, build_Z_mesh, build_t_mesh, build_mesh_fdm,
+                  harmonic, rel_error, glo_error, get_range)
+
+from fdm import (derivative_operator, fdm_derivative_operators, bfmt, bfmtf,
+                 set_block, impose_boundary)
+from graphical import plot_solution
 
 
 def set_parameters_ladder(custom_parameters=None, fitted_couplings=True,
@@ -869,5 +880,821 @@ def calculate_pulse_energy(params, order=0):
 
     return aux
 
+
 #############################################################################
 # Finite difference ORCA routines.
+
+def eqs_fdm(params, tau, Z, Omegat="square", case=0, adiabatic=True,
+            pt=4, pz=4, plots=False, folder="", sparse=False):
+    r"""Calculate the matrix form of equations `Wp X = 0`."""
+    if not adiabatic:
+        nv = 3
+    else:
+        nv = 2
+    # We unpack parameters.
+    if True:
+        Nt = params["Nt"]
+        Nz = params["Nz"]
+        Gamma21 = calculate_Gamma21(params)
+        Gamma32 = calculate_Gamma32(params)
+        kappa = calculate_kappa(params)
+        Omega = calculate_Omega(params)
+
+        nX = nv*Nt*Nz
+        Ntz = Nt*Nz
+    # We build the derivative matrices.
+    if True:
+        args = [tau, Z]
+        kwargs = {"pt": pt, "pz": pz, "plots": plots, "folder": folder,
+                  "sparse": sparse}
+        DT, DZ = fdm_derivative_operators(*args, **kwargs)
+
+    if sparse:
+        eye = sp_eye(Ntz, format=bfmt)
+        Wp = bfmtf((nX, nX), dtype=np.complex128)
+    else:
+        eye = np.eye(Ntz)
+        Wp = np.zeros((nX, nX), complex)
+
+    # We build the Wp matrix.
+    if True:
+        # Empty space.
+        if case == 0 and adiabatic:
+            # We set the time derivatives.
+            Wp = set_block(Wp, 0, 0, DT)
+            Wp = set_block(Wp, 1, 1, DT)
+
+            # We set the right-hand side terms.
+            Wp = set_block(Wp, 0, 0, Gamma32*eye)
+            Wp = set_block(Wp, 1, 1, c/2*DZ)
+        # Storage phase.
+        elif case == 1 and adiabatic:
+            # We set the time derivatives.
+            Wp = set_block(Wp, 0, 0, DT)
+            Wp = set_block(Wp, 1, 1, DT)
+
+            # We set the right-hand side terms.
+            Wp = set_block(Wp, 0, 0, Gamma32*eye)
+            Wp = set_block(Wp, 1, 1, c*kappa**2/2/Gamma21*eye)
+            Wp = set_block(Wp, 1, 1, c/2*DZ)
+        # Memory write/read phase.
+        elif case == 2 and adiabatic:
+            # We set the time derivatives.
+            Wp = set_block(Wp, 0, 0, DT)
+            Wp = set_block(Wp, 1, 1, DT)
+
+            # We set the right-hand side terms.
+            Wp = set_block(Wp, 0, 0, Gamma32*eye)
+            Wp = set_block(Wp, 1, 1, c*kappa**2/2/Gamma21*eye)
+            Wp = set_block(Wp, 1, 1, c/2*DZ)
+
+            if hasattr(Omegat, "__call__"):
+                def Wpt(t):
+                    if sparse:
+                        aux1 = Omegat(t)
+                        aux1 = spdiags(aux1, 0, Nt, Nt, format=bfmt)
+                        aux2 = sp_eye(Nz, format=bfmt)
+                        Omegatm = sp_kron(aux1, aux2, format=bfmt)
+                    else:
+                        Omegatm = np.kron(np.diag(Omegat(t)), np.eye(Nz))
+                    aux1 = np.abs(Omegatm)**2/Gamma21
+                    aux2 = kappa*Omegatm/Gamma21
+                    aux3 = c*kappa*np.conjugate(Omegatm)/2/Gamma21
+                    Wp_ = Wp.copy()
+                    Wp_ = set_block(Wp_, 0, 0, aux1)
+                    Wp_ = set_block(Wp_, 0, 1, aux2)
+                    Wp_ = set_block(Wp_, 1, 0, aux3)
+                    return Wp_
+
+            else:
+                aux1 = np.abs(Omega)**2/Gamma21
+                aux2 = kappa*Omega/Gamma21
+                aux3 = c*kappa*np.conjugate(Omega)/2/Gamma21
+                Wp = set_block(Wp, 0, 0, aux1*eye)
+                Wp = set_block(Wp, 0, 1, aux2*eye)
+                Wp = set_block(Wp, 1, 0, aux3*eye)
+
+        elif case == 0 and not adiabatic:
+            # We set the time derivatives.
+            Wp = set_block(Wp, 0, 0, DT)
+            Wp = set_block(Wp, 1, 1, DT)
+            Wp = set_block(Wp, 2, 2, DT)
+
+            # We set the right-hand side terms.
+            Wp = set_block(Wp, 0, 0, Gamma21*eye)
+            Wp = set_block(Wp, 1, 1, Gamma32*eye)
+            Wp = set_block(Wp, 2, 2, c/2*DZ)
+
+        elif case == 1 and not adiabatic:
+            # We set the time derivatives.
+            Wp = set_block(Wp, 0, 0, DT)
+            Wp = set_block(Wp, 1, 1, DT)
+            Wp = set_block(Wp, 2, 2, DT)
+
+            # We set the right-hand side terms.
+            Wp = set_block(Wp, 0, 0, Gamma21*eye)
+            Wp = set_block(Wp, 1, 1, Gamma32*eye)
+            Wp = set_block(Wp, 2, 2, c/2*DZ)
+            Wp = set_block(Wp, 0, 2, 1j*kappa*eye)
+            Wp = set_block(Wp, 2, 0, 1j*kappa*c/2*eye)
+        elif case == 2 and not adiabatic:
+            # We set the time derivatives.
+            Wp = set_block(Wp, 0, 0, DT)
+            Wp = set_block(Wp, 1, 1, DT)
+            Wp = set_block(Wp, 2, 2, DT)
+
+            # We set the right-hand side terms.
+            Wp = set_block(Wp, 0, 0, Gamma21*eye)
+            Wp = set_block(Wp, 1, 1, Gamma32*eye)
+            Wp = set_block(Wp, 2, 2, c/2*DZ)
+            Wp = set_block(Wp, 0, 2, 1j*kappa*eye)
+            Wp = set_block(Wp, 2, 0, 1j*kappa*c/2*eye)
+
+            if hasattr(Omegat, "__call__"):
+                def Wpt(t):
+                    if sparse:
+                        aux1 = Omegat(t)
+                        aux1 = spdiags(aux1, 0, Nt, Nt, format=bfmt)
+                        aux2 = sp_eye(Nz, format=bfmt)
+                        Omegatm = sp_kron(aux1, aux2, format=bfmt)
+                    else:
+                        Omegatm = np.kron(np.diag(Omegat(t)), np.eye(Nz))
+                    aux = np.conjugate(Omegatm)
+                    Wp_ = Wp.copy()
+                    Wp_ = set_block(Wp_, 0, 1, 1j*aux)
+                    Wp_ = set_block(Wp_, 1, 0, 1j*Omegatm)
+                    return Wp_
+            else:
+                aux = 1j*np.conjugate(Omega)
+                Wp = set_block(Wp, 0, 1, aux*eye)
+                Wp = set_block(Wp, 1, 0, 1j*Omega*eye)
+
+    if hasattr(Omegat, "__call__"):
+        return Wpt
+    else:
+        if plots:
+            ################################################################
+            # Plotting Wp.
+            plt.figure(figsize=(15, 15))
+            plt.title("$W'$")
+            plt.imshow(np.log(np.abs(Wp)))
+            plt.savefig(folder+"Wp.png", bbox_inches="tight")
+            plt.close("all")
+
+        return Wp
+
+
+def solve_fdm_subblock(params, Wp, S0t, S0z, B0z, tau, Z,
+                       P0z=None, return_block=False, folder="",
+                       plots=False):
+    r"""We solve using the finite difference method on a block for given
+    boundary conditions, and with time and space precisions `pt` and `pz`.
+    """
+    if P0z is not None:
+        nv = 3
+    else:
+        nv = 2
+    # We unpack parameters.
+    if True:
+        Nt = params["Nt"]
+        Nz = params["Nz"]
+        nX = nv*Nt*Nz
+    # We transform the system.
+    if True:
+        W, b, Xb_ = impose_boundary(Wp, tau, S0t, S0z, B0z)
+        Ws = csr_matrix(W)
+        bs = csr_matrix(np.reshape(b, (nX, 1)))
+    # We solve the transformed system.
+    if True:
+        Xsol = linalg.spsolve(Ws, bs)
+        Xsol_ = np.reshape(Xsol, (nv, Nt, Nz))
+    if plots:
+        ################################################################
+        # Plotting W and B.
+        plt.figure(figsize=(15, 7))
+        plt.subplot(1, 2, 1)
+        plt.title("$W$")
+        plt.imshow(np.log(np.abs(W)))
+
+        plt.subplot(1, 2, 2)
+        plt.title("$B$")
+        plt.plot(np.abs(b))
+        plt.savefig(folder+"W-b.png", bbox_inches="tight")
+        plt.close("all")
+
+        ################################################################
+        # Plotting B and S.
+        plt.figure(figsize=(19, 9))
+
+        plt.subplot(4, 1, 1)
+        plt.title("$B$ boundary")
+        plt.imshow(np.abs(Xb_[0, :, :]))
+
+        plt.subplot(4, 1, 2)
+        plt.title("$B$ solution")
+        plt.imshow(np.abs(Xsol_[0, :, :]))
+
+        plt.subplot(4, 1, 3)
+        plt.title("$S$ boundary")
+        plt.imshow(np.abs(Xb_[1, :, :]))
+
+        plt.subplot(4, 1, 4)
+        plt.title("$S$ solution")
+        plt.imshow(np.abs(Xsol_[1, :, :]))
+        plt.savefig(folder+"BS.png", bbox_inches="tight")
+        plt.close("all")
+    # We unpack the solution and return it.
+    if return_block:
+        Bsol = Xsol_[0]
+        Ssol = Xsol_[1]
+    else:
+        if P0z is not None:
+            Psol = Xsol_[0, -1, :]
+            Bsol = Xsol_[1, -1, :]
+            Ssol = Xsol_[2, -1, :]
+            return Psol, Bsol, Ssol
+        else:
+            Bsol = Xsol_[0, -1, :]
+            Ssol = Xsol_[1, -1, :]
+            return Bsol, Ssol
+
+
+def solve_fdm_block(params, S0t, S0z, B0z, tau, Z, P0z=None, Omegat="square",
+                    case=0, method=0, pt=4, pz=4,
+                    plots=False, folder="", name="", verbose=0):
+    r"""We solve using the finite difference method for given
+    boundary conditions, and with time and space precisions `pt` and `pz`.
+
+    INPUT:
+
+    -  ``params`` - dict, the problem's parameters.
+
+    -  ``S0t`` - array, the S(Z=-L/2, t) boundary condition.
+
+    -  ``S0z`` - array, the S(Z, t=0) boundary condition.
+
+    -  ``B0z`` - array, the B(Z, t=0) boundary condition.
+
+    -  ``tau`` - array, the time axis.
+
+    -  ``Z`` - array, the space axis.
+
+    -  ``P0z`` - array, the P(Z, t=0) boundary condition (default None).
+
+    -  ``Omegat`` - function, a function that returns the temporal mode of the
+                    Rabi frequency at time tau (default "square").
+
+    -  ``case`` - int, the dynamics to solve for: 0 for free space, 1 for
+                  propagation through vapour, 2 for propagation through vapour
+                  and non-zero control field.
+
+    -  ``method`` - int, the fdm method to use: 0 to solve the full space, 1
+                  to solve by time step slices.
+
+    -  ``pt`` - int, the precision order for the numerical time derivate. Must
+                be even.
+
+    -  ``pz`` - int, the precision order for the numerical space derivate. Must
+                be even.
+
+    -  ``plots`` - bool, whether to make plots.
+
+    -  ``folder`` - str, the directory to save plots in.
+
+    -  ``verbose`` - int, a vague measure much of messages to print.
+
+    OUTPUT:
+
+    A solution to the equations for the given case and boundary conditions.
+
+    """
+    t00_tot = time()
+    # We unpack parameters.
+    if True:
+        Nt = params["Nt"]
+        Nz = params["Nz"]
+        Nt_prop = pt + 1
+
+        # The number of functions.
+        nv = 2
+
+    # We make pre-calculations.
+    if True:
+        if P0z is not None:
+            P = np.zeros((Nt, Nz), complex)
+            P[0, :] = P0z
+        B = np.zeros((Nt, Nz), complex)
+        S = np.zeros((Nt, Nz), complex)
+        B[0, :] = B0z
+        S[0, :] = S0z
+    if method == 0:
+        # We solve the full block.
+        sparse = True
+        aux1 = [params, tau, Z]
+        aux2 = {"Omegat": Omegat, "pt": pt, "pz": pz, "case": case,
+                "folder": folder, "plots": False, "sparse": sparse,
+                "adiabatic": P0z is None}
+        # print(Omegat)
+        t00 = time()
+        Wp = eqs_fdm(*aux1, **aux2)
+        if verbose > 0: print("FDM Eqs time  : {:.3f} s".format(time()-t00))
+        # print(type(Wp))
+        args = [Wp, tau, S0t, S0z, B0z]
+        t00 = time()
+        W, b, Xb_ = impose_boundary(*args, sparse=sparse)
+        if verbose > 0: print("FDM Bdr time  : {:.3f} s".format(time()-t00))
+
+        t00 = time()
+        if sparse:
+            X = linalg.spsolve(W, b)
+            mes = "FDM Sol time  : {:.3f} s"
+            if verbose > 0: print(mes.format(time()-t00))
+        else:
+            X = np.linalg.solve(W, b)
+            mes = "FDM Sol time  : {:.3f} s"
+            if verbose > 0: print(mes.format(time()-t00))
+        B, S = np.reshape(X, (nv, Nt, Nz))
+
+    elif method == 1:
+        # We solve by time step slices.
+        ##################################################################
+        S0t_interp = interpolator(tau, S0t, kind="cubic")
+        params_prop = params.copy()
+        params_prop["Nt"] = Nt_prop
+        dtau = tau[1] - tau[0]
+        params_prop["T"] = dtau
+        tau_slice = build_t_mesh(params_prop, uniform=True)
+
+        t00_eqs = time()
+        ##################################################################
+        # The equations are here!
+        aux1 = [params_prop, tau_slice, Z]
+        aux2 = {"Omegat": Omegat, "pt": pt, "pz": pz, "case": case,
+                "folder": folder, "plots": False,
+                "adiabatic": P0z is None}
+        Wp = eqs_fdm(*aux1, **aux2)
+
+        # We solve the system.
+        ##################################################################
+        if verbose > 0:
+            runtime_eqs = time()-t00_eqs
+            print("Eqs time: {} s.".format(runtime_eqs))
+        ##################################################################
+        # The for loop for propagation is this.
+        tt = 0
+        for tt in range(Nt-1):
+            if verbose > 1: print("t_{} = {}".format(tt, tau[tt]))
+            # We specify the block to solve.
+            tau_prop = tau[tt] + tau_slice
+            B0z_prop = B[tt, :]
+            S0z_prop = S[tt, :]
+            S0t_prop = S0t_interp(tau_prop)
+
+            aux1 = [params_prop, Wp, S0t_prop, S0z_prop, B0z_prop,
+                    tau_prop, Z]
+            aux2 = {"folder": folder, "plots": False, "P0z": P0z}
+            if P0z is None:
+                Bslice, Sslice = solve_fdm_subblock(*aux1, **aux2)
+                B[tt+1, :] = Bslice
+                S[tt+1, :] = Sslice
+            else:
+                Pslice, Bslice, Sslice = solve_fdm_subblock(*aux1, **aux2)
+                P[tt+1, :] = Pslice
+                B[tt+1, :] = Bslice
+                S[tt+1, :] = Sslice
+
+    # Report running time.
+    if verbose > 0:
+        runtime_tot = time() - t00_tot
+        aux = [runtime_tot, Nt, Nz, Nt*Nz]
+        mes = "FDM block time: {:.3f} s for a grid of {} x {} = {} points."
+        print(mes.format(*aux))
+    # Plotting.
+    if plots:
+        plt.figure(figsize=(15, 8))
+        plt.subplot(1, 2, 1)
+        plt.title("$B$ numeric")
+        cs = plt.pcolormesh(Z*100, tau*1e9, np.abs(B))
+        plt.colorbar(cs)
+        plt.ylabel(r"$\tau$ (ns)")
+        plt.xlabel("$Z$ (cm)")
+
+        plt.subplot(1, 2, 2)
+        plt.title("$S$ numeric")
+        cs = plt.pcolormesh(Z*100, tau*1e9, np.abs(S))
+        plt.colorbar(cs)
+        plt.ylabel(r"$\tau$ (ns)")
+        plt.xlabel("$Z$ (cm)")
+        aux = folder+"solution_numeric"+name+".png"
+        plt.savefig(aux, bbox_inches="tight")
+        plt.close("all")
+
+    if P0z is not None:
+        return P, B, S
+    else:
+        return B, S
+
+
+def solve_fdm(params, S0t=None, S0z=None, B0z=None, P0z=None, Omegat="square",
+              method=0, pt=4, pz=4,
+              folder="", name="", plots=False, verbose=0,
+              seed=None, analytic_storage=True, return_modes=False):
+    r"""We solve using the finite difference method for given
+    boundary conditions, and with time and space precisions `pt` and `pz`.
+    """
+    adiabatic = P0z is None
+    t00f = time()
+    # We unpack parameters.
+    if True:
+        aux = build_mesh_fdm(params)
+        params, Z, tau, tau1, tau2, tau3 = aux
+        Nt = params["Nt"]
+        Nz = params["Nz"]
+        kappa = calculate_kappa(params)
+        Gamma21 = calculate_Gamma21(params)
+        Gamma32 = calculate_Gamma32(params)
+        Omega = calculate_Omega(params)
+        taus = params["taus"]
+        t0s = params["t0s"]
+        D = Z[-1] - Z[0]
+
+        Nt1 = tau1.shape[0]
+        Nt2 = tau2.shape[0]
+        Nt3 = tau3.shape[0]
+
+        # We initialize the solution.
+        if not adiabatic:
+            P = np.zeros((Nt, Nz), complex)
+        B = np.zeros((Nt, Nz), complex)
+        S = np.zeros((Nt, Nz), complex)
+
+    # We solve in the initial region.
+    if True:
+        if verbose > 0: t000f = time()
+        B_exact1 = np.zeros((Nt1, Nz))
+        S_exact1 = np.zeros((Nt1, Nz))
+        ttau1 = np.outer(tau1, np.ones(Nz))
+        ZZ1 = np.outer(np.ones(Nt1), Z)
+
+        nshg = params["nshg"]
+        if seed == "S":
+            sigs = taus/(2*np.sqrt(2*np.log(2)))*np.sqrt(2)
+            S_exact1 = hermite_gauss(nshg, -t0s + ttau1 - 2*ZZ1/c, sigs)
+            S_exact1 = S_exact1*np.exp(-(ZZ1+D/2)*kappa**2/Gamma21)
+            S[:Nt1, :] = S_exact1
+        elif seed == "B":
+            nshg = nshg + 1
+            B_exact1 = harmonic(nshg, ZZ1, D)
+            B[:Nt1, :] = B_exact1
+        elif S0t is not None or B0z is not None:
+            if S0t is not None:
+                S0t_interp = interpolator(tau, S0t, kind="cubic")
+                S_exact1 = S0t_interp(ttau1 - 2*(ZZ1+D/2)/c)
+                S_exact1 = S_exact1*np.exp(-(ZZ1+D/2)*kappa**2/Gamma21)
+                S[:Nt1, :] = S_exact1
+            if B0z is not None:
+                B_exact1 = np.outer(np.ones(Nt1), B0z)
+                B[:Nt1, :] = B_exact1
+        else:
+            mes = "Either of S0t, B0z, or seed must be given as arguments"
+            raise ValueError(mes)
+        if verbose > 0: print("region 1 time : {:.3f} s".format(time()-t000f))
+    # We obtain the input modes for the memory.
+    if True:
+        if S0t is None and B0z is None:
+            if seed == "P":
+                # We seed with a harmonic mode.
+                raise NotImplementedError
+            elif seed == "B":
+                # We seed with a harmonic mode.
+                B02z = harmonic(nshg, Z, D)
+                S02z = np.zeros(Nz, complex)
+                S02t = np.zeros(Nt2, complex)
+            elif seed == "S":
+                # We seed with a Hermite-Gauss mode.
+                # HG modes propagate as:
+                #  S(tau, Z) = HG_n(t-t0s - 2*Z/c, sigma)
+                #            x exp(-(Z+D/2)*kappa**2/Gamma21)
+                #
+                # We calculate the gaussian standard deviation.
+                B02z = np.zeros(Nz, complex)
+                S02z = hermite_gauss(nshg, tau2[0] - t0s - 2*Z/c, sigs)
+                S02z = S02z*np.exp(-(Z+D/2)*kappa**2/Gamma21)
+                S02t = hermite_gauss(nshg, tau2 - t0s + D/c, sigs)
+            else:
+                raise ValueError
+        else:
+            if S0t is not None:
+                B02z = B_exact1[Nt1-1, :]
+                S02z = S_exact1[Nt1-1, :]
+                S02t = S0t[Nt1-1:Nt1+Nt2-1]
+            if B0z is not None:
+                B02z = B0z
+                S02z = np.zeros(Nz, complex)
+                S02t = np.zeros(Nt2, complex)
+
+    # We solve in the memory region using the FDM.
+    if True:
+        if verbose > 0: t000f = time()
+        params_memory = params.copy()
+        params_memory["Nt"] = Nt2
+        aux1 = [params_memory, S02t, S02z, B02z, tau2, Z]
+        aux2 = {"Omegat": Omegat, "method": method, "pt": pt, "pz": pz,
+                "folder": folder, "plots": False,
+                "verbose": verbose-1, "P0z": P0z, "case": 2}
+        if adiabatic:
+            B2, S2 = solve_fdm_block(*aux1, **aux2)
+            B[Nt1-1:Nt1+Nt2-1] = B2
+            S[Nt1-1:Nt1+Nt2-1] = S2
+        else:
+            P2, B2, S2 = solve_fdm_block(*aux1, **aux2)
+            P[Nt1-1:Nt1+Nt2-1] = P2
+            B[Nt1-1:Nt1+Nt2-1] = B2
+            S[Nt1-1:Nt1+Nt2-1] = S2
+        if verbose > 0: print("region 2 time : {:.3f} s".format(time()-t000f))
+    # We solve in the storage region.
+    if True:
+        if verbose > 0: t000f = time()
+        B03z = B[Nt1+Nt2-2, :]
+        S03z = S[Nt1+Nt2-2, :]
+        if seed == "S":
+            S03t = hermite_gauss(nshg, tau3 - t0s + D/c, sigs)
+        else:
+            S03t = np.zeros(Nt3, complex)
+
+        params_storage = params.copy()
+        params_storage["Nt"] = Nt3
+        aux1 = [params_storage, S03t, S03z, B03z, tau3, Z]
+        aux2 = {"pt": pt, "pz": pz, "folder": folder, "plots": False,
+                "verbose": 1, "P0z": P0z, "case": 1}
+
+        # We calculate analyticaly.
+        if adiabatic:
+            if analytic_storage > 0:
+                t03 = tau3[0]
+                ttau3 = np.outer(tau3, np.ones(Nz))
+                ZZ3 = np.outer(np.ones(Nt3), Z)
+
+                arg = -np.abs(Omega)**2/Gamma21 - Gamma32
+                B[Nt1+Nt2-2:] = B03z*np.exp(arg*(ttau3 - t03))
+
+                # The region determined by S03z
+
+                S03z_reg = np.where(ttau3 <= t03 + (2*ZZ3+D)/c, 1.0, 0.0)
+                # The region determined by S03t
+                S03t_reg = 1 - S03z_reg
+
+                S03z_f = interpolator(Z, S03z, kind="cubic")
+                S03t_f = interpolator(tau3, S03t, kind="cubic")
+
+            if analytic_storage == 1:
+                S03z_reg = S03z_reg*S03z_f(ZZ3 - (ttau3-t03)*c/2)
+                S03z_reg = S03z_reg*np.exp(-c*kappa**2/2/Gamma21*(ttau3-t03))
+
+                S03t_reg = S03t_reg*S03t_f(ttau3 - (2*ZZ3+D)/c)
+                S03t_reg = S03t_reg*np.exp(-kappa**2/Gamma21*(ZZ3+D/2))
+
+                S[Nt1+Nt2-2:] = S03z_reg + S03t_reg
+            elif analytic_storage == 2:
+                aux1 = S03z_f(D/2 - (tau3-t03)*c/2)
+                aux1 = aux1*np.exp(-c*kappa**2/2/Gamma21*(tau3-t03))
+
+                aux2 = S03t_f(tau3 - (2*D/2+D)/c)
+                aux2 = aux2*np.exp(-kappa**2/Gamma21*(D/2+D/2))
+
+                Sf3t = S03z_reg[:, -1]*aux1 + S03t_reg[:, -1]*aux2
+                S[Nt1+Nt2-2:, -1] = Sf3t
+
+                tff = tau3[-1]
+                aux3 = S03z_f(Z - (tff-t03)*c/2)
+                aux3 = aux3*np.exp(-c*kappa**2/2/Gamma21*(tff-t03))
+
+                aux4 = S03t_f(tff - (2*Z+D)/c)
+                aux4 = aux4*np.exp(-kappa**2/Gamma21*(Z+D/2))
+
+                Sf3z = S03z_reg[-1, :]*aux3 + S03t_reg[-1, :]*aux4
+                S[-1, :] = Sf3z
+                S[Nt1+Nt2-2:, 0] = S03t
+
+            elif analytic_storage == 0:
+                B3, S3 = solve_fdm_block(*aux1, **aux2)
+                B[Nt1+Nt2-2:] = B3
+                S[Nt1+Nt2-2:] = S3
+            else:
+                raise ValueError
+        else:
+            P3, B3, S3 = solve_fdm_block(*aux1, **aux2)
+            P[Nt1+Nt2-2:] = P3
+            B[Nt1+Nt2-2:] = B3
+            S[Nt1+Nt2-2:] = S3
+        if verbose > 0: print("region 3 time : {:.3f} s".format(time()-t000f))
+    if verbose > 0:
+        print("Full exec time: {:.3f} s".format(time()-t00f))
+    if plots:
+        fs = 15
+        if verbose > 0: print("Plotting...")
+
+        fig, ax1 = plt.subplots()
+        ax2 = ax1.twinx()
+        ax1.plot(tau*1e9, np.abs(S[:, 0])**2*1e-9, "b-")
+        ax1.plot(tau*1e9, np.abs(S[:, -1])**2*1e-9, "g-")
+
+        angle1 = np.unwrap(np.angle(S[:, -1]))/2/np.pi
+        ax2.plot(tau*1e9, angle1, "g:")
+
+        ax1.set_xlabel(r"$\tau \ [ns]$", fontsize=fs)
+        ax1.set_ylabel(r"Signal  [1/ns]", fontsize=fs)
+        ax2.set_ylabel(r"Phase  [revolutions]", fontsize=fs)
+        plt.savefig(folder+"Sft_"+name+".png", bbox_inches="tight")
+        plt.close()
+
+        plt.figure(figsize=(15, 9))
+        plt.subplot(1, 2, 1)
+        plt.title("$B$ FDM")
+        cs = plt.pcolormesh(Z*100, tau*1e9, np.abs(B)**2)
+        plt.colorbar(cs)
+        plt.ylabel(r"$\tau$ (ns)")
+        plt.xlabel("$Z$ (cm)")
+
+        plt.subplot(1, 2, 2)
+        plt.title("$S$ FDM")
+        cs = plt.pcolormesh(Z*100, tau*1e9, np.abs(S)**2*1e-9)
+        plt.colorbar(cs)
+        plt.ylabel(r"$\tau$ (ns)")
+        plt.xlabel("$Z$ (cm)")
+
+        plt.savefig(folder+"solution_fdm_"+name+".png", bbox_inches="tight")
+        plt.close("all")
+
+    if adiabatic:
+        if return_modes:
+            B0 = B02z
+            S0 = S[:, 0]
+            B1 = B03z
+            S1 = S[:, -1]
+            return tau, Z, B0, S0, B1, S1
+        else:
+            return tau, Z, B, S
+    else:
+        return tau, Z, P, B, S
+
+
+def check_block_fdm(params, B, S, tau, Z, case=0, P=None,
+                    pt=4, pz=4, folder="", plots=False, verbose=1):
+    r"""Check the equations in an FDM block."""
+    # We build the derivative operators.
+    Nt = tau.shape[0]
+    Nz = Z.shape[0]
+    Gamma32 = calculate_Gamma32(params)
+    Gamma21 = calculate_Gamma21(params)
+    Omega = calculate_Omega(params)
+    kappa = calculate_kappa(params)
+    Dt = derivative_operator(tau, p=pt)
+    Dz = derivative_operator(Z, p=pt)
+
+    adiabatic = P is None
+
+    # Empty space.
+    if case == 0 and adiabatic:
+        # We get the time derivatives.
+        DtB = np.array([np.dot(Dt, B[:, jj]) for jj in range(Nz)]).T
+        DtS = np.array([np.dot(Dt, S[:, jj]) for jj in range(Nz)]).T
+
+        DzS = np.array([np.dot(Dz, S[ii, :]) for ii in range(Nt)])
+        rhsB = -Gamma32*B
+        rhsS = -c/2*DzS
+    # Storage phase.
+    elif case == 1 and adiabatic:
+        # We get the time derivatives.
+        DtB = np.array([np.dot(Dt, B[:, jj]) for jj in range(Nz)]).T
+        DtS = np.array([np.dot(Dt, S[:, jj]) for jj in range(Nz)]).T
+
+        DzS = np.array([np.dot(Dz, S[ii, :]) for ii in range(Nt)])
+        rhsB = -Gamma32*B
+        rhsS = -c/2*DzS - c*kappa**2/2/Gamma21*S
+    # Memory write/read phase.
+    elif case == 2 and adiabatic:
+        # We get the time derivatives.
+        DtB = np.array([np.dot(Dt, B[:, jj]) for jj in range(Nz)]).T
+        DtS = np.array([np.dot(Dt, S[:, jj]) for jj in range(Nz)]).T
+
+        DzS = np.array([np.dot(Dz, S[ii, :]) for ii in range(Nt)])
+        rhsB = -Gamma32*B
+        rhsS = -c/2*DzS - c*kappa**2/2/Gamma21*S
+
+        rhsB += -np.abs(Omega)**2/Gamma21*B
+        rhsB += -kappa*Omega/Gamma21*S
+        rhsS += -c*kappa*np.conjugate(Omega)/2/Gamma21*B
+
+    else:
+        raise ValueError
+
+    if True:
+        # We put zeros into the boundaries.
+        ig = pt/2 + 1
+        ig = pt + 1
+        ig = 1
+
+        DtB[:ig, :] = 0
+        DtS[:ig, :] = 0
+        DtS[:, :ig] = 0
+
+        rhsB[:ig, :] = 0
+        rhsS[:ig, :] = 0
+        rhsS[:, :ig] = 0
+
+        # We put zeros in all the boundaries to neglect border effects.
+        DtB[-ig:, :] = 0
+        DtS[-ig:, :] = 0
+        DtB[:, :ig] = 0
+        DtB[:, -ig:] = 0
+        DtS[:, -ig:] = 0
+
+        rhsB[-ig:, :] = 0
+        rhsS[-ig:, :] = 0
+        rhsB[:, :ig] = 0
+        rhsB[:, -ig:] = 0
+        rhsS[:, -ig:] = 0
+
+    if True:
+        Brerr = rel_error(DtB, rhsB)
+        Srerr = rel_error(DtS, rhsS)
+
+        Bgerr = glo_error(DtB, rhsB)
+        Sgerr = glo_error(DtS, rhsS)
+
+        i1, j1 = np.unravel_index(Srerr.argmax(), Srerr.shape)
+        i2, j2 = np.unravel_index(Sgerr.argmax(), Sgerr.shape)
+
+        with warnings.catch_warnings():
+            mes = r'divide by zero encountered in log10'
+            warnings.filterwarnings('ignore', mes)
+
+            aux1 = list(np.log10(get_range(Brerr)))
+            aux1 += [np.log10(np.mean(Brerr))]
+            aux1 += list(np.log10(get_range(Srerr)))
+            aux1 += [np.log10(np.abs(np.mean(Srerr)))]
+
+            aux2 = list(np.log10(get_range(Bgerr)))
+            aux2 += [np.log10(np.mean(Bgerr))]
+            aux2 += list(np.log10(get_range(Sgerr)))
+            aux2 += [np.log10(np.mean(Sgerr))]
+
+        aux1[1], aux1[2] = aux1[2], aux1[1]
+        aux1[-1], aux1[-2] = aux1[-2], aux1[-1]
+        aux2[1], aux2[2] = aux2[2], aux2[1]
+        aux2[-1], aux2[-2] = aux2[-2], aux2[-1]
+
+        if verbose > 0:
+            print("Left and right hand sides comparison:")
+            print("        Bmin   Bave   Bmax   Smin   Save   Smax")
+            mes = "{:6.2f} {:6.2f} {:6.2f} {:6.2f} {:6.2f} {:6.2f}"
+            print("rerr: "+mes.format(*aux1))
+            print("gerr: "+mes.format(*aux2))
+    if plots:
+        args = [tau, Z, Brerr, Srerr, folder, "check_01_eqs_rerr"]
+        kwargs = {"log": True, "ii": i1, "jj": j1}
+        plot_solution(*args, **kwargs)
+
+        args = [tau, Z, Bgerr, Sgerr, folder, "check_02_eqs_gerr"]
+        kwargs = {"log": True, "ii": i2, "jj": j2}
+        plot_solution(*args, **kwargs)
+
+    return aux1, aux2, Brerr, Srerr, Bgerr, Sgerr
+
+
+def check_fdm(params, B, S, tau, Z, P=None,
+              pt=4, pz=4, folder="", name="check", plots=False, verbose=1):
+    r"""Check the equations in an FDM block."""
+    params, Z, tau, tau1, tau2, tau3 = build_mesh_fdm(params)
+    N1 = len(tau1)
+    N2 = len(tau2)
+    # N3 = len(tau3)
+
+    # S1 = S[:N1]
+    S2 = S[N1-1:N1-1+N2]
+    # S3 = S[N1-1+N2-1:N1-1+N2-1+N3]
+
+    # B1 = B[:N1]
+    B2 = B[N1-1:N1-1+N2]
+    # B3 = B[N1-1+N2-1:N1-1+N2-1+N3]
+
+    Brerr = np.zeros(B.shape)
+    Srerr = np.zeros(B.shape)
+    Bgerr = np.zeros(B.shape)
+    Sgerr = np.zeros(B.shape)
+
+    print("the log_10 of relative and global errors (for B and S):")
+    ####################################################################
+    kwargs = {"case": 2, "folder": folder, "plots": False}
+    aux = check_block_fdm(params, B2, S2, tau2, Z, **kwargs)
+    checks2_rerr, checks2_gerr, B2rerr, S2rerr, B2gerr, S2gerr = aux
+
+    Brerr[N1-1:N1-1+N2] = B2rerr
+    Srerr[N1-1:N1-1+N2] = S2rerr
+    Bgerr[N1-1:N1-1+N2] = B2gerr
+    Sgerr[N1-1:N1-1+N2] = S2gerr
+    ####################################################################
+    if plots:
+        plot_solution(tau, Z, Brerr, Srerr, folder, "rerr"+name, log=True)
+        plot_solution(tau, Z, Bgerr, Sgerr, folder, "gerr"+name, log=True)
