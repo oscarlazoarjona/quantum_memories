@@ -7,4 +7,4 @@ r"""This is a repository for solvers for the Maxwell-Bloch equations of various
 quantum memories, and calculations using them.
 """
 
-__version__ = "0.2"
+__version__ = "1.0"
