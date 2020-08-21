@@ -9,11 +9,13 @@ quantum memories, and calculations using them.
 
 __version__ = "1.0"
 
-from lib import (time_bandwith_product, set_parameters_ladder,
-                 calculate_pulse_energy, print_params,
-                 build_mesh_fdm, sketch_frame_transform,
-                 calculate_xi0, calculate_F,
-                 calculate_optimal_input_xi, num_integral,
-                 calculate_optimal_input_Z,
-                 calculate_optimal_input_tau,
-                 solve_fdm, check_fdm)
+
+from misc import time_bandwith_product
+from orca import (set_parameters_ladder,
+                  calculate_pulse_energy, print_params,
+                  calculate_xi0, calculate_F,
+                  calculate_optimal_input_xi, num_integral,
+                  calculate_optimal_input_Z,
+                  calculate_optimal_input_tau)
+from fdm import build_mesh_fdm, solve_fdm, check_fdm
+from graphical import sketch_frame_transform, plot_solution
