@@ -44,9 +44,10 @@ def rel_error(a, b):
     return err
 
 
-def glo_error(a, b):
+def glo_error(a, b, scale=None):
     r"""Get the "global" relative error between two quantities."""
-    scale = np.amax([np.amax(np.abs(a)), np.amax(np.abs(b))])
+    if scale is None:
+        scale = np.amax([np.amax(np.abs(a)), np.amax(np.abs(b))])
     if scale == 0.0:
         return np.zeros(a.shape)
     return np.abs(a-b)/scale

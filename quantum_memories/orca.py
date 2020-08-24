@@ -10,6 +10,7 @@ from scipy.constants import physical_constants, c, hbar, epsilon_0, mu_0
 from scipy.sparse import linalg, csr_matrix, spdiags
 from scipy.sparse import eye as sp_eye
 from scipy.sparse import kron as sp_kron
+from scipy.sparse import csr_matrix, spmatrix, bmat
 
 from matplotlib import pyplot as plt
 from sympy import oo
