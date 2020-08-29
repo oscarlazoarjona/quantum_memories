@@ -244,9 +244,9 @@ def D_coefficients(p, j, xaxis=None, d=1, symbolic=False):
     [-1  4  -5  2]
 
     A non uniform grid:
-    >>> x = np.array([1.0, 3.0, 5.0])
-    >>> print(D_coefficients(2, 1, xaxis=x))
-    [-0.25  0.    0.25]
+    >>> x = np.array([0.0, 1.0, 5.0])
+    >>> print(D_coefficients(2, 0, xaxis=x))
+    [-1.2   1.25 -0.05]
 
     """
     def poly_deri(x, a, n):
@@ -281,19 +281,10 @@ def D_coefficients(p, j, xaxis=None, d=1, symbolic=False):
     return coefficients
 
 
-def derivative_operator(xaxis, p=2, symbolic=False, sparse=False):
-    u"""A matrix representation of the differential operator for an arbitrary
-    xaxis.
-
-    Multiplying the returned matrix by a discretized function gives the second
-    order centered finite difference for all points except the extremes, where
-    a forward and backward second order finite difference is used for the
-    first and last points respectively.
-
-    Setting higher=True gives a fourth order approximation for the extremes.
-
-    Setting symbolic=True gives a symbolic exact representation of the
-    coefficients.
+def derivative_operator(xaxis, p=2, d=1, symbolic=False, sparse=False,
+                        function=False):
+    u"""Return a function to calculate the derivative of a discretized
+    function for an arbitrary grid.
 
     INPUT:
 
@@ -301,9 +292,11 @@ def derivative_operator(xaxis, p=2, symbolic=False, sparse=False):
 
     -  ``p`` - int, the precission order of the approximation.
 
-    -  ``symbolic`` - a bool, whether to return symbolic coefficients.
+    -  ``symbolic`` - bool, whether to return symbolic coefficients.
 
-    -  ``sparse`` - a bool, whether to return a sparse matrix.
+    -  ``sparse`` - bool, whether to use a sparse matrix.
+
+    -  ``matrix`` - bool, whether to return the matrix.
 
     OUTPUT:
 
@@ -313,7 +306,15 @@ def derivative_operator(xaxis, p=2, symbolic=False, sparse=False):
     ========
 
     >>> from sympy import pprint
-    >>> D = derivative_operator(range(5))
+    >>> x = np.array([2, 4, 5, 7, 10])
+    >>> f = 5*x
+    >>> D = derivative_operator(x)
+    >>> print(D(f))
+    [5. 5. 5. 5. 5.]
+
+    Getting the matrix representation of the derivatives
+
+    >>> D = derivative_operator(range(5), matrix=True)
     >>> print(D)
     [[-1.5  2.  -0.5  0.   0. ]
      [-0.5  0.   0.5  0.   0. ]
@@ -321,7 +322,7 @@ def derivative_operator(xaxis, p=2, symbolic=False, sparse=False):
      [ 0.   0.  -0.5  0.   0.5]
      [ 0.   0.   0.5 -2.   1.5]]
 
-    >>> D = derivative_operator(range(5), p=4)
+    >>> D = derivative_operator(range(5), p=4, matrix=True)
     >>> print(D)
     [[-2.08333333  4.         -3.          1.33333333 -0.25      ]
      [-0.25       -0.83333333  1.5        -0.5         0.08333333]
@@ -329,7 +330,7 @@ def derivative_operator(xaxis, p=2, symbolic=False, sparse=False):
      [-0.08333333  0.5        -1.5         0.83333333  0.25      ]
      [ 0.25       -1.33333333  3.         -4.          2.08333333]]
 
-    >>> D = derivative_operator(range(5), p=4, symbolic=True)
+    >>> D = derivative_operator(range(5), p=4, symbolic=True, matrix=True)
     >>> pprint(D)
     ⎡-25                           ⎤
     ⎢────    4     -3   4/3   -1/4 ⎥
@@ -345,7 +346,10 @@ def derivative_operator(xaxis, p=2, symbolic=False, sparse=False):
     ⎢ 1/4   -4/3   3     -4    ──  ⎥
     ⎣                          12  ⎦
 
-    >>> D = derivative_operator([1, 2, 4, 6, 7], p=2, symbolic=True)
+    For an arbitrary grid:
+
+    >>> x = [1, 2, 4, 6, 7]
+    >>> D = derivative_operator(x, p=2, symbolic=True, matrix=True)
     >>> pprint(D)
     ⎡-4/3  3/2   -1/6   0     0 ⎤
     ⎢                           ⎥
@@ -380,10 +384,11 @@ def derivative_operator(xaxis, p=2, symbolic=False, sparse=False):
     else:
         D = np.zeros((N, N))
     #########################################################################
+    # We determine if the grid is uniform.
     hlist = [xaxis[i+1] - xaxis[i] for i in range(N-1)]
     err = np.any([rel_dif(hlist[i], h) >= 1e-5 for i in range(N-1)])
     if not err:
-        coefficients = [D_coefficients(p, i, symbolic=symbolic)
+        coefficients = [D_coefficients(p, i, d=d, symbolic=symbolic)
                         for i in range(p+1)]
         mid = int((p+1)/2)
 
@@ -414,11 +419,19 @@ def derivative_operator(xaxis, p=2, symbolic=False, sparse=False):
                 a = i - p/2
                 jj = p/2
             b = a + p + 1
-            D[i, a: b] = D_coefficients(p, jj, xaxis=xaxis[a:b],
+            D[i, a: b] = D_coefficients(p, jj, xaxis=xaxis[a:b], d=d,
                                         symbolic=symbolic)
     if sparse:
+        D = bfmtf(D)
+
+    if sparse:
         return bfmtf(D)
-    return D
+    elif function:
+        def deri(f):
+            return np.dot(D, f)
+        return deri
+    else:
+        return D
 
 
 def fdm_derivative_operators(tau, Z, pt=4, pz=4, sparse=False,
