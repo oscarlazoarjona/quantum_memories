@@ -421,8 +421,6 @@ def derivative_operator(xaxis, p=2, d=1, symbolic=False, sparse=False,
             b = a + p + 1
             D[i, a: b] = D_coefficients(p, jj, xaxis=xaxis[a:b], d=d,
                                         symbolic=symbolic)
-    if sparse:
-        D = bfmtf(D)
 
     if sparse:
         return bfmtf(D)
