@@ -10,7 +10,6 @@ from scipy.constants import physical_constants, c, hbar, epsilon_0, mu_0
 from scipy.sparse import linalg, csr_matrix, spdiags
 from scipy.sparse import eye as sp_eye
 from scipy.sparse import kron as sp_kron
-from scipy.sparse import csr_matrix, spmatrix, bmat
 
 from matplotlib import pyplot as plt
 from sympy import oo
@@ -894,8 +893,8 @@ def eqs_fdm(params, tau, Z, Omegat="square", case=0, adiabatic=True,
         nv = 2
     # We unpack parameters.
     if True:
-        Nt = params["Nt"]
-        Nz = params["Nz"]
+        Nt = tau.shape[0]
+        Nz = Z.shape[0]
         Gamma21 = calculate_Gamma21(params)
         Gamma32 = calculate_Gamma32(params)
         kappa = calculate_kappa(params)
