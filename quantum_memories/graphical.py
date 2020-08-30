@@ -110,7 +110,7 @@ def sketch_frame_transform(params, folder="", name="", draw_readout=False,
         plot_curve(Om2, "r-", lw=1)
 
         plt.fill_between(Om1[1]*100, Om1[0]*1e9, Om2[0]*1e9, color="r",
-                         alpha=0.25, label=r"$\Omega$")
+                         alpha=0.25, label=r"$\Xi$")
         plt.fill_between(S1[1]*100, S1[0]*1e9, S2[0]*1e9, color="b",
                          alpha=0.25, label=r"$S$")
         if draw_readout:
@@ -142,7 +142,7 @@ def sketch_frame_transform(params, folder="", name="", draw_readout=False,
             plot_curve(aux3, "k-", lw=1, alpha=0.25)
             plot_curve(aux4, "k-", lw=1, alpha=0.25)
         plt.fill_between(Om1p[1]*100, Om1p[0]*1e9, Om2p[0]*1e9,
-                         color="r", alpha=0.25, label=r"$\Omega$")
+                         color="r", alpha=0.25, label=r"$\Xi$")
         plt.fill_between(S1p[1]*100, S1p[0]*1e9, S2p[0]*1e9,
                          color="b", alpha=0.25, label=r"$S$")
         plt.legend(loc=2)
