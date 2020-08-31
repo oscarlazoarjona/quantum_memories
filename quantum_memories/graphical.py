@@ -9,8 +9,8 @@ from matplotlib.colors import LogNorm
 from misc import build_t_mesh, build_Z_mesh
 
 
-def sketch_frame_transform(params, folder="", name="", draw_readout=False,
-                           auxiliaries=False):
+def sketch_frame_transform(params, folder="", name="sketch",
+                           draw_readout=False, auxiliaries=False):
     r"""Make a sketech of the frame transform."""
     def transform(x):
         t, z = x
@@ -156,7 +156,7 @@ def sketch_frame_transform(params, folder="", name="", draw_readout=False,
         plt.ylabel(r"$\tau \ \mathrm{(ns)}$", fontsize=15)
         plt.xlabel(r"$Z' \ \mathrm{(cm)}$", fontsize=15)
         # plt.ylim(None, 1.5)
-        plt.savefig(folder+"sketch_"+name+".png", bbox_inches="tight")
+        plt.savefig(folder+name+".png", bbox_inches="tight")
         plt.close()
 
 
