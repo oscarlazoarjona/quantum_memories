@@ -146,6 +146,39 @@ def sinc(x):
     return normalized_sinc(x/np.pi)
 
 
+def heaviside_pi(x):
+    u"""The Heaviside Pi function.
+
+           ⎧   1        for |x| <= 1/2
+    Π(x) = ⎨
+           ⎩   0        otherwise
+
+    """
+    return np.where(np.abs(x) <= 0.5, 1.0, 0.0)
+
+
+def heaviside_lambda(x):
+    u"""The Heaviside Pi function.
+
+           ⎧   1 - |x|  for |x| <= 1
+    Λ(x) = ⎨
+           ⎩     0      otherwise
+
+    """
+    return np.where(np.abs(x) <= 1, 1-np.abs(x), 0.0)
+
+
+def heaviside_theta(x):
+    u"""The Heaviside Pi function.
+
+           ⎧   1        for x >= 0
+    Θ(x) = ⎨
+           ⎩   0        otherwise
+
+    """
+    return np.where(x >= 0, 1.0, 0.0)
+
+
 def num_integral(f, dt):
     """We integrate using the trapezium rule."""
     if hasattr(dt, "__getitem__"):
