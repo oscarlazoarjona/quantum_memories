@@ -82,14 +82,14 @@ def interpolator(xp, fp, kind="linear"):
 
 def ffftfreq(t):
     r"""Calculate the angular frequency axis for a given time axis."""
-    dt = t[1]-t[0]
+    dt = (t[-1]-t[0])/len(t)
     nu = np.fft.fftshift(np.fft.fftfreq(t.size, dt))
     return nu
 
 
 def ffftfft(f, t):
     r"""Calculate the Fourier transform."""
-    dt = t[1]-t[0]
+    dt = (t[-1]-t[0])/len(t)
     return np.fft.fftshift(np.fft.fft(np.fft.ifftshift(f)))*dt
 
 
