@@ -9,7 +9,8 @@ from scipy.interpolate import interp1d
 from numpy import sinc as normalized_sinc
 from scipy.special import hermite
 from scipy.misc import factorial
-from sympy import log, pi
+from sympy import log, pi, symbols, exp, diff, sqrt
+from sympy import factorial as factorial_sym
 from scipy.constants import k as k_B
 from scipy.constants import c
 
@@ -119,11 +120,17 @@ def time_bandwith_product(m=1, symbolic=False):
         return (B-b)*(1-np.exp(-a*(m-1)**p))+b
 
 
-def hermite_gauss(n, x, sigma):
+def hermite_gauss(n, x, sigma, symbolic=False):
     """Generate normalized Hermite-Gauss mode."""
     X = x / sigma
-    result = hermite(n)(X) * np.exp(-X**2 / 2)
-    result /= np.sqrt(factorial(n) * np.sqrt(np.pi) * 2**n * sigma)
+    if symbolic:
+        u = symbols("u")
+        h = (-1)**n *exp(u**2) *diff(exp(-u**2), u, n)
+        result = h.subs(u, X)*exp(-X**2/2)
+        result /= sqrt(factorial_sym(n) * sqrt(pi) * 2**n * sigma)
+    else:
+        result = hermite(n)(X) * np.exp(-X**2 / 2)
+        result /= np.sqrt(factorial(n) * np.sqrt(np.pi) * 2**n * sigma)
     return result
 
 
