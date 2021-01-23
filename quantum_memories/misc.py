@@ -1,14 +1,13 @@
 # -*- coding: utf-8 -*-
-# Compatible with Python 2.7.xx
-# Copyright (C) 2020 Oscar Gerardo Lazo Arjona
+# Compatible with Python 3.8
+# Copyright (C) 2020-2021 Oscar Gerardo Lazo Arjona
 # mailto: oscar.lazoarjona@physics.ox.ac.uk
 r"""Miscellaneous routines."""
 import numpy as np
 import warnings
 from scipy.interpolate import interp1d
 from numpy import sinc as normalized_sinc
-from scipy.special import hermite
-from scipy.misc import factorial
+from scipy.special import hermite, factorial
 from sympy import log, pi, symbols, exp, diff, sqrt
 from sympy import factorial as factorial_sym
 from scipy.constants import k as k_B

@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
-# Compatible with Python 2.7.xx
-# Copyright (C) 2020 Oscar Gerardo Lazo Arjona
+# Compatible with Python 3.8
+# Copyright (C) 2020-2021 Oscar Gerardo Lazo Arjona
 # mailto: oscar.lazoarjona@physics.ox.ac.uk
 r"""Graphical routines."""
 import numpy as np
 from matplotlib import pyplot as plt
 from matplotlib.colors import LogNorm
-from misc import build_t_mesh, build_Z_mesh
+from quantum_memories.misc import build_t_mesh, build_Z_mesh
 
 
 def sketch_frame_transform(params, folder="", name="sketch",

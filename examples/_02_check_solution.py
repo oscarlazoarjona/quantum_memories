@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
-# Compatible with Python 2.7.xx
-# Copyright (C) 2020 Oscar Gerardo Lazo Arjona
+# Compatible with Python 3.8
+# Copyright (C) 2020-2021 Oscar Gerardo Lazo Arjona
 # mailto: oscar.lazoarjona@physics.ox.ac.uk
 r"""This script checks the solution from _01_high_efficiency.py against the
 equations.
@@ -63,10 +63,10 @@ if True:
     ########################################################################
 # We load the saved solutions.
 if True:
-    sol = load(open("__01__high_efficiency/solution_write.pickle", "r"))
+    sol = load(open("__01__high_efficiency/solution_write.pickle", "rb"))
     tau, Z, Bw, Sw = sol
 
-    sol = load(open("__01__high_efficiency/solution_read.pickle", "r"))
+    sol = load(open("__01__high_efficiency/solution_read.pickle", "rb"))
     tau, Z, Br, Sr = sol
 
     print("For the write process")

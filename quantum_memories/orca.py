@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
-# Compatible with Python 2.7.xx
-# Copyright (C) 2020 Oscar Gerardo Lazo Arjona
+# Compatible with Python 3.8
+# Copyright (C) 2020-2021 Oscar Gerardo Lazo Arjona
 # mailto: oscar.lazoarjona@physics.ox.ac.uk
 r"""Orca related routines."""
 from time import time
@@ -14,14 +14,17 @@ from scipy.sparse import kron as sp_kron
 from matplotlib import pyplot as plt
 from sympy import oo
 
-from misc import (time_bandwith_product, vapour_number_density, rayleigh_range,
-                  ffftfreq, iffftfft, interpolator, sinc, hermite_gauss,
-                  num_integral, build_Z_mesh, build_t_mesh, build_mesh_fdm,
-                  harmonic, rel_error, glo_error, get_range)
+from quantum_memories.misc import (time_bandwith_product,
+                                   vapour_number_density, rayleigh_range,
+                                   ffftfreq, iffftfft, interpolator, sinc,
+                                   hermite_gauss, num_integral, build_Z_mesh,
+                                   build_t_mesh, build_mesh_fdm, harmonic,
+                                   rel_error, glo_error, get_range)
 
-from fdm import (derivative_operator, fdm_derivative_operators, bfmt, bfmtf,
-                 set_block, impose_boundary)
-from graphical import plot_solution
+from quantum_memories.fdm import (derivative_operator,
+                                  fdm_derivative_operators, bfmt, bfmtf,
+                                  set_block, impose_boundary)
+from quantum_memories.graphical import plot_solution
 
 
 def set_parameters_ladder(custom_parameters=None, fitted_couplings=True,

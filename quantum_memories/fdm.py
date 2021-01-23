@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
-# Compatible with Python 2.7.xx
-# Copyright (C) 2020 Oscar Gerardo Lazo Arjona
+# Compatible with Python 3.8
+# Copyright (C) 2020-2021 Oscar Gerardo Lazo Arjona
 # mailto: oscar.lazoarjona@physics.ox.ac.uk
 r"""Finite difference routines."""
 import numpy as np
@@ -482,7 +482,7 @@ def set_block(A, i, j, B):
     r"""A quick function to set block matrices."""
     nX = A.shape[0]
     Ntz = B.shape[0]
-    nv = nX/Ntz
+    nv = int(nX/Ntz)
     if isinstance(A, spmatrix):
         ZERO = bfmtf((Ntz, Ntz))
         block = [[ZERO for jj in range(nv)] for ii in range(nv)]

@@ -15,7 +15,7 @@ as well as the memory efficiencies for different control powers
 Installing
 --------
 This software requires pip and git to be installed. These can be installed as
-"Anaconda Python 2.7" and "GIT Version Control System" from the department's
+"Anaconda Python 3" and "GIT Version Control System" from the department's
 self-service application for Windows, or downloaded and manually installed from
 https://www.continuum.io/downloads and https://git-scm.com/downloads.
 
