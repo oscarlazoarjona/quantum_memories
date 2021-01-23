@@ -185,18 +185,20 @@ def plot_solution(tau, Z, B, S, folder, name,
     plt.figure(figsize=(19, 8))
     plt.subplot(1, 2, 1)
     if log:
-        cb = plt.pcolormesh(Z*100, tau*1e9, np.abs(B), norm=get_lognorm(B))
+        cb = plt.pcolormesh(Z*100, tau*1e9, np.abs(B), norm=get_lognorm(B),
+                            shading="auto")
     else:
-        cb = plt.pcolormesh(Z*100, tau*1e9, np.abs(B))
+        cb = plt.pcolormesh(Z*100, tau*1e9, np.abs(B), shading="auto")
     if colorbar: plt.colorbar(cb)
     plt.ylabel(r"$\tau$ (ns)")
     plt.xlabel("$Z$ (cm)")
 
     plt.subplot(1, 2, 2)
     if log:
-        cb = plt.pcolormesh(Z*100, tau*1e9, np.abs(S), norm=get_lognorm(S))
+        cb = plt.pcolormesh(Z*100, tau*1e9, np.abs(S), norm=get_lognorm(S),
+                            shading="auto")
     else:
-        cb = plt.pcolormesh(Z*100, tau*1e9, np.abs(S))
+        cb = plt.pcolormesh(Z*100, tau*1e9, np.abs(S), shading="auto")
     if ii is not None:
         plt.plot(Z[jj]*100, tau[ii]*1e9, "rx")
     if colorbar: plt.colorbar(cb)
