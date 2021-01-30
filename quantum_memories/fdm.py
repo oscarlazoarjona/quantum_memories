@@ -386,8 +386,9 @@ def derivative_operator(xaxis, p=2, d=1, symbolic=False, sparse=False,
     #########################################################################
     # We determine if the grid is uniform.
     hlist = [xaxis[i+1] - xaxis[i] for i in range(N-1)]
-    err = np.any([rel_dif(hlist[i], h) >= 1e-5 for i in range(N-1)])
-    if not err:
+    uniform_grid = not np.any([rel_dif(hlist[i], h) >= 1e-5
+                               for i in range(N-1)])
+    if uniform_grid:
         coefficients = [D_coefficients(p, i, d=d, symbolic=symbolic)
                         for i in range(p+1)]
         mid = int((p+1)/2)
@@ -409,15 +410,15 @@ def derivative_operator(xaxis, p=2, d=1, symbolic=False, sparse=False,
     else:
         # We generate a p + 1 long list for each of the N rows.
         for i in range(N):
-            if i < p/2:
+            if i < p//2:
                 a = 0
                 jj = i
-            elif i >= N - p/2:
+            elif i >= N - p//2:
                 a = N - p - 1
                 jj = (i - (N - p - 1))
             else:
-                a = i - p/2
-                jj = p/2
+                a = i - p//2
+                jj = p//2
             b = a + p + 1
             D[i, a: b] = D_coefficients(p, jj, xaxis=xaxis[a:b], d=d,
                                         symbolic=symbolic)
