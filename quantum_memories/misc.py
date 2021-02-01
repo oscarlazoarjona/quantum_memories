@@ -10,6 +10,7 @@ from numpy import sinc as normalized_sinc
 from scipy.special import hermite, factorial
 from sympy import log, pi, symbols, exp, diff, sqrt
 from sympy import factorial as factorial_sym
+from sympy import Basic, Piecewise, And, Abs
 from scipy.constants import k as k_B
 from scipy.constants import c
 
@@ -124,7 +125,7 @@ def hermite_gauss(n, x, sigma, symbolic=False):
     X = x / sigma
     if symbolic:
         u = symbols("u")
-        h = (-1)**n *exp(u**2) *diff(exp(-u**2), u, n)
+        h = (-1)**n*exp(u**2)*diff(exp(-u**2), u, n)
         result = h.subs(u, X)*exp(-X**2/2)
         result /= sqrt(factorial_sym(n) * sqrt(pi) * 2**n * sigma)
     else:
@@ -141,6 +142,23 @@ def harmonic(n, x, L):
     return h
 
 
+def falling_exponential(x, gamma, a=None, simp=False):
+    u"""A falling exponential function with `1/e` length `gamma`.
+
+           ⎧   √γ exp(-γ x/2)        for x >= 0
+    f(x) = ⎨
+           ⎩   0        otherwise
+
+    """
+    if isinstance(x, Basic):
+        f = sqrt(gamma)*exp(-gamma*x/2)
+        if simp:
+            return f
+        else:
+            return Piecewise(*[(f, x >= 0), (0, True)])
+    return np.where(x >= 0, np.sqrt(gamma)*np.exp(-gamma*x/2), 0.0)
+
+
 def sinc(x):
     u"""The non-normalized sinc.
 
@@ -152,6 +170,22 @@ def sinc(x):
     return normalized_sinc(x/np.pi)
 
 
+def heaviside_theta(x, a=None):
+    u"""The Heaviside Pi function.
+
+           ⎧   1        for x >= 0
+    Θ(x) = ⎨
+           ⎩   0        otherwise
+
+    """
+    if isinstance(x, Basic):
+        if a is None:
+            return Piecewise(*[(1, x >= 0), (0, True)])
+        else:
+            return Piecewise(*[(1, x > 0), (a, x == 0), (0, True)])
+    return np.where(x >= 0, 1.0, 0.0)
+
+
 def heaviside_pi(x):
     u"""The Heaviside Pi function.
 
@@ -160,29 +194,25 @@ def heaviside_pi(x):
            ⎩   0        otherwise
 
     """
+    if isinstance(x, Basic):
+        return Piecewise(*[(1, And(x >= -x/x/2, x <= x/x/2)), (0, True)])
+
     return np.where(np.abs(x) <= 0.5, 1.0, 0.0)
 
 
-def heaviside_lambda(x):
-    u"""The Heaviside Pi function.
+def heaviside_lambda(t):
+    u"""The Heaviside Lambda function.
 
-           ⎧   1 - |x|  for |x| <= 1
-    Λ(x) = ⎨
-           ⎩     0      otherwise
-
-    """
-    return np.where(np.abs(x) <= 1, 1-np.abs(x), 0.0)
-
-
-def heaviside_theta(x):
-    u"""The Heaviside Pi function.
-
-           ⎧   1        for x >= 0
-    Θ(x) = ⎨
-           ⎩   0        otherwise
+           ⎧  1 - |t|      for |t| < 1
+    Λ(t) = ⎨
+           ⎩    0          otherwise
 
     """
-    return np.where(x >= 0, 1.0, 0.0)
+    if hasattr(t, "__getitem__"):
+        return np.where(np.abs(t) < 1, 1-np.abs(t), 0.0)
+
+    return Piecewise((1 - Abs(t), Abs(t) < 1),
+                     (0, True))
 
 
 def num_integral(f, dt):
