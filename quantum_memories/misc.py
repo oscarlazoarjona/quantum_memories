@@ -120,15 +120,18 @@ def time_bandwith_product(m=1, symbolic=False):
         return (B-b)*(1-np.exp(-a*(m-1)**p))+b
 
 
-def hermite_gauss(n, x, sigma, symbolic=False):
+def hermite_gauss(n, x, sigma, symbolic=False, power_fwhm=False):
     """Generate normalized Hermite-Gauss mode."""
-    X = x / sigma
     if symbolic:
+        if power_fwhm: sigma = sigma/2/sqrt(log(2))
+        X = x / sigma
         u = symbols("u")
         h = (-1)**n*exp(u**2)*diff(exp(-u**2), u, n)
         result = h.subs(u, X)*exp(-X**2/2)
         result /= sqrt(factorial_sym(n) * sqrt(pi) * 2**n * sigma)
     else:
+        if power_fwhm: sigma = sigma/2/np.sqrt(np.log(2))
+        X = x / sigma
         result = hermite(n)(X) * np.exp(-X**2 / 2)
         result /= np.sqrt(factorial(n) * np.sqrt(np.pi) * 2**n * sigma)
     return result
