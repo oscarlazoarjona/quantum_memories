@@ -6,7 +6,7 @@ r"""Finite difference routines."""
 import numpy as np
 from time import time
 
-from scipy.sparse import csr_matrix, spmatrix, bmat
+from scipy.sparse import csc_matrix, spmatrix, bmat
 from scipy.sparse import kron as sp_kron
 from scipy.sparse import eye as sp_eye
 
@@ -194,8 +194,8 @@ def impose_boundary(Wp, tau, S0t, S0z, B0z, P0z=None, sparse=False):
 # Finite difference equations.
 
 
-bfmt = "csr"
-bfmtf = csr_matrix
+bfmt = "csc"
+bfmtf = csc_matrix
 
 
 def D_coefficients(p, j, xaxis=None, d=1, symbolic=False):
