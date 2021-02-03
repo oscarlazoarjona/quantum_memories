@@ -10,7 +10,8 @@ from numpy import sinc as normalized_sinc
 from scipy.special import hermite, factorial
 from sympy import log, pi, symbols, exp, diff, sqrt
 from sympy import factorial as factorial_sym
-from sympy import Basic, Piecewise, And, Abs
+from sympy import sinc as sinc_sym
+from sympy import Basic, Piecewise, And, Abs, sin
 from scipy.constants import k as k_B
 from scipy.constants import c
 
@@ -120,9 +121,9 @@ def time_bandwith_product(m=1, symbolic=False):
         return (B-b)*(1-np.exp(-a*(m-1)**p))+b
 
 
-def hermite_gauss(n, x, sigma, symbolic=False, power_fwhm=False):
+def hermite_gauss(n, x, sigma, power_fwhm=False):
     """Generate normalized Hermite-Gauss mode."""
-    if symbolic:
+    if isinstance(x, Basic):
         if power_fwhm: sigma = sigma/2/sqrt(log(2))
         X = x / sigma
         u = symbols("u")
@@ -139,9 +140,13 @@ def hermite_gauss(n, x, sigma, symbolic=False, power_fwhm=False):
 
 def harmonic(n, x, L):
     r"""Generate a normalized harmonic mode."""
-    omega = np.pi/L
-    h = np.sin(n*omega*(x + L/2))/np.sqrt(L/2)
-    h = h*np.where(np.abs(x) < L/2, 1.0, 0.0)
+    if isinstance(x, Basic):
+        omega = pi
+        h = sin(n*omega*(x + L/2))/sqrt(L/2)
+    else:
+        omega = np.pi/L
+        h = np.sin(n*omega*(x + L/2))/np.sqrt(L/2)
+        h = h*np.where(np.abs(x) < L/2, 1.0, 0.0)
     return h
 
 
@@ -170,6 +175,8 @@ def sinc(x):
               ⎩ sin(x)/x   otherwise
 
     """
+    if isinstance(x, Basic):
+        return sinc_sym(x)
     return normalized_sinc(x/np.pi)
 
 
@@ -469,7 +476,12 @@ def build_mesh_fdm(params, verbose=0):
         aux1 = Nt1+Nt2+Nt3-2
         total_size = aux1*Nz
         aux2 = [Nt1, Nt2, Nt3, Nz, aux1, Nz, total_size]
-        mes = "Grid size: ({} + {} + {}) x {} = {} x {} = {} points"
+        mes = "Grid size: ({} + {} + {} - 2) x {} = {} x {} = {} points"
+        print(mes.format(*aux2))
+
+        aux2 = [total_size, 4*total_size**2]
+        mes = "The W matrix for the full grid would be"
+        mes += ": (2 x {})^2 = {} points"
         print(mes.format(*aux2))
 
         dz = Z[1]-Z[0]
@@ -480,9 +492,10 @@ def build_mesh_fdm(params, verbose=0):
 
         mes = "The control field region has {} x {} = {} =? {} points"
         print(mes.format(Nt2, Nz, Nt2*Nz, N**2))
-        mes = "The W matrix would be (5 x 2 x Nz)^2 = {} x {} = {} points"
-        NW = 2*5*Nz
-        print(mes.format(NW, NW, NW**2))
+        mes = "The W matrix for the control region would be "
+        mes += "(2 x {})^2 = {} points"
+        aux = Nt2*Nz
+        print(mes.format(aux, 4*aux**2))
         mes = "The ratio of steps is (dz/dt)/(c/2) = {:.3f}"
         print(mes.format(dz/dt/(c/2)))
         aux = [T1/tauw, T2/tauw, T3/tauw]
