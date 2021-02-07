@@ -11,7 +11,7 @@ from scipy.special import hermite, factorial
 from sympy import log, pi, symbols, exp, diff, sqrt
 from sympy import factorial as factorial_sym
 from sympy import sinc as sinc_sym
-from sympy import Basic, Piecewise, And, Abs, sin
+from sympy import Basic, Piecewise, Abs, sin
 from scipy.constants import k as k_B
 from scipy.constants import c
 
@@ -205,7 +205,7 @@ def heaviside_pi(x):
 
     """
     if isinstance(x, Basic):
-        return Piecewise(*[(1, And(x >= -x/x/2, x <= x/x/2)), (0, True)])
+        return Piecewise(*[(1, Abs(x) <= x/x/2), (0, True)])
 
     return np.where(np.abs(x) <= 0.5, 1.0, 0.0)
 
