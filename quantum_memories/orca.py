@@ -153,7 +153,8 @@ def set_parameters_ladder(custom_parameters=None, fitted_couplings=True,
            "USE_SQUARE_CTRL": USE_SQUARE_CTRL,
            "nshg": nshg, "nwhg": nwhg, "nrhg": nrhg,
            "nssquare": nssquare, "nwsquare": nwsquare, "nrsquare": nrsquare,
-           "ntauw": 1.0, "N": 101}
+           "ntauw": 1.0, "N": 101,
+           "pumping": 0.0}
     # NOTE: if an independent parameter is added here, it must also
     # be added in the next block of code to update it.
 
@@ -307,6 +308,9 @@ def set_parameters_ladder(custom_parameters=None, fitted_couplings=True,
             if "ntauw" in custom_parameters.keys():
                 pms["ntauw"] = custom_parameters["ntauw"]
                 nrsquare = custom_parameters["ntauw"]
+            if "pumping" in custom_parameters.keys():
+                pms["pumping"] = custom_parameters["pumping"]
+                nrsquare = custom_parameters["pumping"]
     #########################################################################
 
     if calculate_atom:
@@ -549,8 +553,9 @@ def print_params(params):
     delta1 = params["delta1"]
     delta2 = params["delta2"]
     energy_pulse2 = params["energy_pulse2"]
-
     Temperature = params["Temperature"]
+    pumping = params["pumping"]
+
     n = vapour_number_density(params)
     kappa = calculate_kappa(params)
     ZRs, ZRc = rayleigh_range(params)
@@ -580,6 +585,7 @@ def print_params(params):
     print("Temperature: {:6.2f} °C".format(Temperature-273.15))
     print("n: {:.2e} m^-3 ".format(n))
     print("kappa: {:.2e} sqrt((m s)^-1)".format(kappa))
+    print("Pumping: {}".format(pumping))
 
 
 def calculate_Omega(params):
@@ -618,7 +624,7 @@ def calculate_xi0(params):
     return xi0
 
 
-def calculate_kappa(params, pumped=True):
+def calculate_kappa(params):
     r"""Calculate the kappa parameter."""
     # We calculate the number density assuming Cs 133
     omega_laser1 = params["omega_laser1"]
@@ -628,9 +634,10 @@ def calculate_kappa(params, pumped=True):
     e_charge = params["e_charge"]
     hbar = params["hbar"]
     epsilon_0 = params["epsilon_0"]
+    pumping = params["pumping"]
 
     n_atomic0 = vapour_number_density(params)
-    if not pumped:
+    if pumping != 1.0 or pumping:
         if element == "Cs":
             fground = [3, 4]
         elif element == "Rb":
@@ -638,8 +645,12 @@ def calculate_kappa(params, pumped=True):
                 fground = [2, 3]
             else:
                 fground = [1, 2]
-        upper_fraction = (2*fground[1]+1)/(2*fground[0]+1.0 + 2*fground[1]+1.0)
-        n_atomic0 = upper_fraction*n_atomic0
+
+        upper = 2*fground[1]+1
+        lower = 2*fground[0]+1
+        tot = upper + lower
+        frac = upper/tot + pumping*lower/tot
+        n_atomic0 = frac*n_atomic0
 
     return e_charge*np.sqrt(n_atomic0*omega_laser1/(c*hbar*epsilon_0))*r1
 
