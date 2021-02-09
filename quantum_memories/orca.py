@@ -768,8 +768,9 @@ def calculate_optimal_input_xi(params, xi=None, force_xi0=False,
         Z = build_Z_mesh(params_)
         xi = ffftfreq(Z)
 
-    energy_pulse2 = calculate_pulse_energy(params_)
-    params_["energy_pulse2"] = energy_pulse2
+    if with_critical_energy:
+        energy_pulse2 = calculate_pulse_energy(params_)
+        params_["energy_pulse2"] = energy_pulse2
     xi0 = calculate_xi0(params_)
 
     taus = params_["taus"]
