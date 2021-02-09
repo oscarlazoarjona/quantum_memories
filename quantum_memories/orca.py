@@ -1346,7 +1346,7 @@ def solve_fdm(params, S0t=None, S0z=None, B0z=None, P0z=None, Omegat="square",
         kappa = calculate_kappa(params)
         Gamma21 = calculate_Gamma21(params)
         Gamma32 = calculate_Gamma32(params)
-        Omega = calculate_Omega(params)
+        # Omega = calculate_Omega(params)
         taus = params["taus"]
         t0s = params["t0s"]
         D = Z[-1] - Z[0]
@@ -1468,8 +1468,7 @@ def solve_fdm(params, S0t=None, S0z=None, B0z=None, P0z=None, Omegat="square",
                 ttau3 = np.outer(tau3, np.ones(Nz))
                 ZZ3 = np.outer(np.ones(Nt3), Z)
 
-                arg = -np.abs(Omega)**2/Gamma21 - Gamma32
-                B[Nt1+Nt2-2:] = B03z*np.exp(arg*(ttau3 - t03))
+                B[Nt1+Nt2-2:] = B03z*np.exp(-Gamma32*(ttau3 - t03))
 
                 # The region determined by S03z
 
