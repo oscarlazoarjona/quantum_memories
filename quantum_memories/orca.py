@@ -741,7 +741,21 @@ def calculate_F(params, xi=None):
     return Fxi
 
 
-def calculate_optimal_input_xi(params, xi=None):
+def calculate_optimal_delta2(params):
+    r"""Calculate the detuning of the control field to obtain two-photon
+    resonance and also compensate for Stark shifting.
+    """
+    delta1 = params["delta1"]
+    delta2 = params["delta2"]
+    Omega = calculate_Omega(params)
+    kappa = calculate_kappa(params)
+    delta2 = - delta1 + (np.abs(Omega)**2 - c/2*kappa**2)/delta1
+
+    return delta2
+
+
+def calculate_optimal_input_xi(params, xi=None, force_xi0=False,
+                               with_critical_energy=True):
     r"""Calculate the optimal `xi`-space input for the given parameters.
 
     Note that this returns a Gaussian pulse of time duration params["taus"]
