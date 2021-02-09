@@ -780,13 +780,17 @@ def calculate_optimal_input_xi(params, xi=None, force_xi0=False,
     sigma_xi = DeltaxiS_num/(2*np.sqrt(np.log(2)))
 
     # We make sure that the oscillations in the signal are not too fast.
-    T0 = np.abs(1/c/xi0)
-    if taus/T0 > 5.0 or tauw/T0 > 5.0:
+    Nu0 = np.abs(c*xi0)
+    if (taus*Nu0 > 5.0 or tauw*Nu0 > 5.0) and not force_xi0:
         mes = "The optimal signal has a linear phase that is too fast "
         mes += "for the grid to represent accurately. "
         mes += "Using a flat phase instead."
+        mes += " Set force_xi0=True to override this (but don't Fourier"
+        mes += " transform into input for a z-space problem, please). "
+        mes += "The best thing is to set "
+        mes += "`params[delta2] = calculate_optimal_delta2[params]`"
         warnings.warn(mes)
-        warnings.filterwarnings('ignore', mes)
+        # warnings.filterwarnings('ignore', mes)
         xi0 = 0.0
 
     Zoff = params_["tauw"]/2*(c/2)
@@ -829,8 +833,8 @@ def calculate_optimal_input_Z(params, Z=None):
 
     taus = params["taus"]
     tauw = params["tauw"]
-    T0 = np.abs(1/c/xi0)
-    if taus/T0 > 5.0 or tauw/T0 > 5.0:
+    Nu0 = np.abs(c*xi0)
+    if taus*Nu0 > 5.0 or tauw*Nu0 > 5.0:
         mes = "The optimal signal has a linear phase that is too fast "
         mes += "for the grid to represent accurately. "
         mes += "Using a flat phase instead."
