@@ -135,6 +135,14 @@ if calculate:
     print("Beam-splitter picture transmissivities and reflectivities:")
     print("TB: {:.4f}, RS: {:.4f}".format(TB, RS))
     print("RB: {:.4f}, TS: {:.4f}".format(RB, TS))
+
+    assert np.round(eta_ana, 4) == 0.7953
+    assert np.round(eta_num, 4) == 0.7902
+
+    assert np.round(TB, 4) == 0.0922
+    assert np.round(RS, 4) == 0.8817
+    assert np.round(RB, 4) == 0.9078
+    assert np.round(TS, 4) == 0.1183
 # Save the results.
 if calculate:
     dump([tau, Z, Bw, Sw], open(folder+"solution_write.pickle", "wb"))
