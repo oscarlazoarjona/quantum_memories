@@ -7,7 +7,7 @@ from time import time
 import warnings
 import numpy as np
 from scipy.constants import physical_constants, c, hbar, epsilon_0, mu_0
-from scipy.sparse import linalg, csr_matrix, spdiags
+from scipy.sparse import spdiags
 from scipy.sparse import eye as sp_eye
 from scipy.sparse import kron as sp_kron
 
@@ -23,7 +23,8 @@ from quantum_memories.misc import (time_bandwith_product,
 
 from quantum_memories.fdm import (derivative_operator,
                                   fdm_derivative_operators, bfmt, bfmtf,
-                                  set_block, impose_boundary)
+                                  set_block,
+                                  solve_fdm)
 from quantum_memories.graphical import plot_solution
 
 
@@ -1077,79 +1078,79 @@ def eqs_fdm(params, tau, Z, Omegat="square", case=0, adiabatic=True,
         return Wp
 
 
-def solve_fdm_subblock(params, Wp, S0t, S0z, B0z, tau, Z,
-                       P0z=None, return_block=False, folder="",
-                       plots=False):
-    r"""We solve using the finite difference method on a block for given
-    boundary conditions, and with time and space precisions `pt` and `pz`.
-    """
-    if P0z is not None:
-        nv = 3
-    else:
-        nv = 2
-    # We unpack parameters.
-    if True:
-        Nt = params["Nt"]
-        Nz = params["Nz"]
-        nX = nv*Nt*Nz
-    # We transform the system.
-    if True:
-        W, b, Xb_ = impose_boundary(Wp, tau, S0t, S0z, B0z)
-        Ws = csr_matrix(W)
-        bs = csr_matrix(np.reshape(b, (nX, 1)))
-    # We solve the transformed system.
-    if True:
-        Xsol = linalg.spsolve(Ws, bs)
-        Xsol_ = np.reshape(Xsol, (nv, Nt, Nz))
-    if plots:
-        ################################################################
-        # Plotting W and B.
-        plt.figure(figsize=(15, 7))
-        plt.subplot(1, 2, 1)
-        plt.title("$W$")
-        plt.imshow(np.log(np.abs(W)))
-
-        plt.subplot(1, 2, 2)
-        plt.title("$B$")
-        plt.plot(np.abs(b))
-        plt.savefig(folder+"W-b.png", bbox_inches="tight")
-        plt.close("all")
-
-        ################################################################
-        # Plotting B and S.
-        plt.figure(figsize=(19, 9))
-
-        plt.subplot(4, 1, 1)
-        plt.title("$B$ boundary")
-        plt.imshow(np.abs(Xb_[0, :, :]))
-
-        plt.subplot(4, 1, 2)
-        plt.title("$B$ solution")
-        plt.imshow(np.abs(Xsol_[0, :, :]))
-
-        plt.subplot(4, 1, 3)
-        plt.title("$S$ boundary")
-        plt.imshow(np.abs(Xb_[1, :, :]))
-
-        plt.subplot(4, 1, 4)
-        plt.title("$S$ solution")
-        plt.imshow(np.abs(Xsol_[1, :, :]))
-        plt.savefig(folder+"BS.png", bbox_inches="tight")
-        plt.close("all")
-    # We unpack the solution and return it.
-    if return_block:
-        Bsol = Xsol_[0]
-        Ssol = Xsol_[1]
-    else:
-        if P0z is not None:
-            Psol = Xsol_[0, -1, :]
-            Bsol = Xsol_[1, -1, :]
-            Ssol = Xsol_[2, -1, :]
-            return Psol, Bsol, Ssol
-        else:
-            Bsol = Xsol_[0, -1, :]
-            Ssol = Xsol_[1, -1, :]
-            return Bsol, Ssol
+# def solve_fdm_subblock(params, Wp, S0t, S0z, B0z, tau, Z,
+#                        P0z=None, return_block=False, folder="",
+#                        plots=False):
+#     r"""We solve using the finite difference method on a block for given
+#     boundary conditions, and with time and space precisions `pt` and `pz`.
+#     """
+#     if P0z is not None:
+#         nv = 3
+#     else:
+#         nv = 2
+#     # We unpack parameters.
+#     if True:
+#         Nt = params["Nt"]
+#         Nz = params["Nz"]
+#         nX = nv*Nt*Nz
+#     # We transform the system.
+#     if True:
+#         W, b, Xb_ = impose_boundary(Wp, tau, S0t, S0z, B0z)
+#         Ws = csr_matrix(W)
+#         bs = csr_matrix(np.reshape(b, (nX, 1)))
+#     # We solve the transformed system.
+#     if True:
+#         Xsol = linalg.spsolve(Ws, bs)
+#         Xsol_ = np.reshape(Xsol, (nv, Nt, Nz))
+#     if plots:
+#         ################################################################
+#         # Plotting W and B.
+#         plt.figure(figsize=(15, 7))
+#         plt.subplot(1, 2, 1)
+#         plt.title("$W$")
+#         plt.imshow(np.log(np.abs(W)))
+#
+#         plt.subplot(1, 2, 2)
+#         plt.title("$B$")
+#         plt.plot(np.abs(b))
+#         plt.savefig(folder+"W-b.png", bbox_inches="tight")
+#         plt.close("all")
+#
+#         ################################################################
+#         # Plotting B and S.
+#         plt.figure(figsize=(19, 9))
+#
+#         plt.subplot(4, 1, 1)
+#         plt.title("$B$ boundary")
+#         plt.imshow(np.abs(Xb_[0, :, :]))
+#
+#         plt.subplot(4, 1, 2)
+#         plt.title("$B$ solution")
+#         plt.imshow(np.abs(Xsol_[0, :, :]))
+#
+#         plt.subplot(4, 1, 3)
+#         plt.title("$S$ boundary")
+#         plt.imshow(np.abs(Xb_[1, :, :]))
+#
+#         plt.subplot(4, 1, 4)
+#         plt.title("$S$ solution")
+#         plt.imshow(np.abs(Xsol_[1, :, :]))
+#         plt.savefig(folder+"BS.png", bbox_inches="tight")
+#         plt.close("all")
+#     # We unpack the solution and return it.
+#     if return_block:
+#         Bsol = Xsol_[0]
+#         Ssol = Xsol_[1]
+#     else:
+#         if P0z is not None:
+#             Psol = Xsol_[0, -1, :]
+#             Bsol = Xsol_[1, -1, :]
+#             Ssol = Xsol_[2, -1, :]
+#             return Psol, Bsol, Ssol
+#         else:
+#             Bsol = Xsol_[0, -1, :]
+#             Ssol = Xsol_[1, -1, :]
+#             return Bsol, Ssol
 
 
 def solve_fdm_block(params, S0t, S0z, B0z, tau, Z, P0z=None, Omegat="square",
@@ -1206,11 +1207,10 @@ def solve_fdm_block(params, S0t, S0z, B0z, tau, Z, P0z=None, Omegat="square",
     if True:
         Nt = params["Nt"]
         Nz = params["Nz"]
-        Nt_prop = pt + 1
+        # Nt_prop = pt + 1
 
         # The number of functions.
         nv = 2
-
     # We make pre-calculations.
     if True:
         if P0z is not None:
@@ -1229,72 +1229,99 @@ def solve_fdm_block(params, S0t, S0z, B0z, tau, Z, P0z=None, Omegat="square",
                 "adiabatic": P0z is None}
         # print(Omegat)
         t00 = time()
-        Wp = eqs_fdm(*aux1, **aux2)
+        A = eqs_fdm(*aux1, **aux2)
         if verbose > 0: print("FDM Eqs time  : {:.3f} s".format(time()-t00))
-        # print(type(Wp))
-        args = [Wp, tau, S0t, S0z, B0z]
+        #############
+        # New method.
+        # We get the input indices.
         t00 = time()
-        W, b, Xb_ = impose_boundary(*args, sparse=sparse)
-        if verbose > 0: print("FDM Bdr time  : {:.3f} s".format(time()-t00))
+        auxi = np.arange(nv*Nt*Nz).reshape((nv, Nt, Nz))
+        indsB0 = auxi[0, 0, :].tolist()
+        indsQ0 = np.flip(auxi[1, 0, :]).tolist()
+        indsS0 = auxi[1, :, 0].tolist()
+        inds0_ = indsB0 + indsQ0 + indsS0
 
-        t00 = time()
-        if sparse:
-            X = linalg.spsolve(W, b)
-            mes = "FDM Sol time  : {:.3f} s"
-            if verbose > 0: print(mes.format(time()-t00))
-        else:
-            X = np.linalg.solve(W, b)
-            mes = "FDM Sol time  : {:.3f} s"
-            if verbose > 0: print(mes.format(time()-t00))
-        B, S = np.reshape(X, (nv, Nt, Nz))
+        indsBf = auxi[0, -1, :].tolist()
+        indsSf = auxi[1, :, -1].tolist()
+        indsQf = np.flip(auxi[1, -1, :]).tolist()
+        indsf_ = indsBf + indsSf + indsQf
+        indsf_ = auxi.flatten().tolist()
 
-    elif method == 1:
-        # We solve by time step slices.
-        ##################################################################
-        S0t_interp = interpolator(tau, S0t, kind="cubic")
-        params_prop = params.copy()
-        params_prop["Nt"] = Nt_prop
-        dtau = tau[1] - tau[0]
-        params_prop["T"] = dtau
-        tau_slice = build_t_mesh(params_prop, uniform=True)
+        # We build the input vector.
+        input = np.zeros((len(inds0_), 1), complex)
+        input[:Nz, 0] = B0z
+        input[Nz:2*Nz, 0] = np.flip(S0z)
+        input[2*Nz:, 0] = S0t
 
-        t00_eqs = time()
-        ##################################################################
-        # The equations are here!
-        aux1 = [params_prop, tau_slice, Z]
-        aux2 = {"Omegat": Omegat, "pt": pt, "pz": pz, "case": case,
-                "folder": folder, "plots": False,
-                "adiabatic": P0z is None}
-        Wp = eqs_fdm(*aux1, **aux2)
+        Y = solve_fdm(A, inds0_, indsf_, input=input)
+        B, S = np.reshape(Y, (nv, Nt, Nz))
+        if verbose > 0: print("FDM Sol time  : {:.3f} s".format(time()-t00))
+        #############
 
-        # We solve the system.
-        ##################################################################
-        if verbose > 0:
-            runtime_eqs = time()-t00_eqs
-            print("Eqs time: {} s.".format(runtime_eqs))
-        ##################################################################
-        # The for loop for propagation is this.
-        tt = 0
-        for tt in range(Nt-1):
-            if verbose > 1: print("t_{} = {}".format(tt, tau[tt]))
-            # We specify the block to solve.
-            tau_prop = tau[tt] + tau_slice
-            B0z_prop = B[tt, :]
-            S0z_prop = S[tt, :]
-            S0t_prop = S0t_interp(tau_prop)
+        # t00 = time()
+        # args = [A, tau, S0t, S0z, B0z]
+        # W, b, Xb_ = impose_boundary(*args, sparse=sparse)
+        # if verbose > 0: print("FDM Bdr time  : {:.3f} s".format(time()-t00))
+        #
+        # t00 = time()
+        # if sparse:
+        #     X = linalg.spsolve(W, b)
+        #     mes = "FDM Sol time  : {:.3f} s"
+        #     if verbose > 0: print(mes.format(time()-t00))
+        # else:
+        #     X = np.linalg.solve(W, b)
+        #     mes = "FDM Sol time  : {:.3f} s"
+        #     if verbose > 0: print(mes.format(time()-t00))
+        # B, S = np.reshape(X, (nv, Nt, Nz))
+        # print(111, B.shape, S.shape)
 
-            aux1 = [params_prop, Wp, S0t_prop, S0z_prop, B0z_prop,
-                    tau_prop, Z]
-            aux2 = {"folder": folder, "plots": False, "P0z": P0z}
-            if P0z is None:
-                Bslice, Sslice = solve_fdm_subblock(*aux1, **aux2)
-                B[tt+1, :] = Bslice
-                S[tt+1, :] = Sslice
-            else:
-                Pslice, Bslice, Sslice = solve_fdm_subblock(*aux1, **aux2)
-                P[tt+1, :] = Pslice
-                B[tt+1, :] = Bslice
-                S[tt+1, :] = Sslice
+    # elif method == 1:
+    #     # We solve by time step slices.
+    #     ##################################################################
+    #     S0t_interp = interpolator(tau, S0t, kind="cubic")
+    #     params_prop = params.copy()
+    #     params_prop["Nt"] = Nt_prop
+    #     dtau = tau[1] - tau[0]
+    #     params_prop["T"] = dtau
+    #     tau_slice = build_t_mesh(params_prop, uniform=True)
+    #
+    #     t00_eqs = time()
+    #     ##################################################################
+    #     # The equations are here!
+    #     aux1 = [params_prop, tau_slice, Z]
+    #     aux2 = {"Omegat": Omegat, "pt": pt, "pz": pz, "case": case,
+    #             "folder": folder, "plots": False,
+    #             "adiabatic": P0z is None}
+    #     Wp = eqs_fdm(*aux1, **aux2)
+    #
+    #     # We solve the system.
+    #     ##################################################################
+    #     if verbose > 0:
+    #         runtime_eqs = time()-t00_eqs
+    #         print("Eqs time: {} s.".format(runtime_eqs))
+    #     ##################################################################
+    #     # The for loop for propagation is this.
+    #     tt = 0
+    #     for tt in range(Nt-1):
+    #         if verbose > 1: print("t_{} = {}".format(tt, tau[tt]))
+    #         # We specify the block to solve.
+    #         tau_prop = tau[tt] + tau_slice
+    #         B0z_prop = B[tt, :]
+    #         S0z_prop = S[tt, :]
+    #         S0t_prop = S0t_interp(tau_prop)
+    #
+    #         aux1 = [params_prop, Wp, S0t_prop, S0z_prop, B0z_prop,
+    #                 tau_prop, Z]
+    #         aux2 = {"folder": folder, "plots": False, "P0z": P0z}
+    #         if P0z is None:
+    #             Bslice, Sslice = solve_fdm_subblock(*aux1, **aux2)
+    #             B[tt+1, :] = Bslice
+    #             S[tt+1, :] = Sslice
+    #         else:
+    #             Pslice, Bslice, Sslice = solve_fdm_subblock(*aux1, **aux2)
+    #             P[tt+1, :] = Pslice
+    #             B[tt+1, :] = Bslice
+    #             S[tt+1, :] = Sslice
 
     # Report running time.
     if verbose > 0:
@@ -1328,10 +1355,10 @@ def solve_fdm_block(params, S0t, S0z, B0z, tau, Z, P0z=None, Omegat="square",
         return B, S
 
 
-def solve_fdm(params, S0t=None, S0z=None, B0z=None, P0z=None, Omegat="square",
-              method=0, pt=4, pz=4,
-              folder="", name="", plots=False, verbose=0,
-              seed=None, analytic_storage=True, return_modes=False):
+def solve(params, S0t=None, S0z=None, B0z=None, P0z=None, Omegat="square",
+          method=0, pt=4, pz=4,
+          folder="", name="", plots=False, verbose=0,
+          seed=None, analytic_storage=True, return_modes=False):
     r"""We solve using the finite difference method for given
     boundary conditions, and with time and space precisions `pt` and `pz`.
     """
@@ -1360,7 +1387,6 @@ def solve_fdm(params, S0t=None, S0z=None, B0z=None, P0z=None, Omegat="square",
             P = np.zeros((Nt, Nz), complex)
         B = np.zeros((Nt, Nz), complex)
         S = np.zeros((Nt, Nz), complex)
-
     # We solve in the initial region.
     if True:
         if verbose > 0: t000f = time()
@@ -1392,7 +1418,7 @@ def solve_fdm(params, S0t=None, S0z=None, B0z=None, P0z=None, Omegat="square",
             mes = "Either of S0t, B0z, or seed must be given as arguments"
             raise ValueError(mes)
         if verbose > 0: print("region 1 time : {:.3f} s".format(time()-t000f))
-    # We obtain the input modes for the memory.
+    # We obtain the input modes for the memory region.
     if True:
         if S0t is None and B0z is None:
             if seed == "P":
@@ -1425,7 +1451,6 @@ def solve_fdm(params, S0t=None, S0z=None, B0z=None, P0z=None, Omegat="square",
                 B02z = B0z
                 S02z = np.zeros(Nz, complex)
                 S02t = np.zeros(Nt2, complex)
-
     # We solve in the memory region using the FDM.
     if True:
         if verbose > 0: t000f = time()
@@ -1524,6 +1549,7 @@ def solve_fdm(params, S0t=None, S0z=None, B0z=None, P0z=None, Omegat="square",
         if verbose > 0: print("region 3 time : {:.3f} s".format(time()-t000f))
     if verbose > 0:
         print("Full exec time: {:.3f} s".format(time()-t00f))
+    # Plotting.
     if plots:
         fs = 15
         if verbose > 0: print("Plotting...")
