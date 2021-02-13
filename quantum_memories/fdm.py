@@ -406,7 +406,7 @@ def derivative_operator(xaxis, p=2, d=1, symbolic=False, sparse=False,
         for i in range(N-mid, N):
             D[i, N-p-1:N] = coefficients[p+1-N+i]
 
-        D = D/h
+        D = D/h**d
     else:
         # We generate a p + 1 long list for each of the N rows.
         for i in range(N):
@@ -494,3 +494,8 @@ def set_block(A, i, j, B):
         aj = j*Ntz; bj = (j+1)*Ntz
         A[ai:bi, aj:bj] += B
     return A
+
+
+if __name__ == "__main__":
+    import doctest
+    print(doctest.testmod(verbose=False))
