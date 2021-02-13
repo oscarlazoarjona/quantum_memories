@@ -10,14 +10,15 @@ from __future__ import print_function
 from pickle import dump
 import numpy as np
 from matplotlib import pyplot as plt
-from quantum_memories import (time_bandwith_product, set_parameters_ladder,
-                              calculate_pulse_energy, print_params,
-                              build_mesh_fdm, sketch_frame_transform,
-                              calculate_xi0, calculate_F,
-                              calculate_optimal_input_xi, num_integral,
-                              calculate_optimal_input_Z,
-                              calculate_optimal_input_tau,
-                              solve_fdm)
+from quantum_memories import (time_bandwith_product, build_mesh_fdm,
+                              sketch_frame_transform)
+from quantum_memories.orca import (set_parameters_ladder,
+                                   calculate_pulse_energy, print_params,
+                                   calculate_xi0, calculate_F,
+                                   calculate_optimal_input_xi, num_integral,
+                                   calculate_optimal_input_Z,
+                                   calculate_optimal_input_tau,
+                                   solve)
 from scipy.constants import c
 
 # We establish base parameters.
@@ -102,14 +103,14 @@ if calculate:
     # NOTE: set analytic_storage to 2 for faster calculation.
     kwargs = {"plots": True, "folder": folder, "name": "write", "verbose": 0,
               "analytic_storage": 1, "S0t": S0tau}
-    tau, Z, Bw, Sw = solve_fdm(params, **kwargs)
+    tau, Z, Bw, Sw = solve(params, **kwargs)
 # We calculate the read-out process.
 if calculate:
     B0_stored = Bw[-1, :]
     # NOTE: set analytic_storage to 2 for faster calculation.
     kwargs = {"plots": True, "folder": folder, "name": "read", "verbose": 0,
               "analytic_storage": 1, "B0z": B0_stored}
-    tau, Z, Br, Sr = solve_fdm(params, **kwargs)
+    tau, Z, Br, Sr = solve(params, **kwargs)
 # We calculate the Beam-splitter picture transmissivities and reflectivities.
 if calculate:
     NS = num_integral(np.abs(Sw[:, 0])**2, tau)

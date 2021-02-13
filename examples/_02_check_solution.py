@@ -9,8 +9,9 @@ from __future__ import print_function
 from pickle import load
 import numpy as np
 # from matplotlib import pyplot as plt
-from quantum_memories import (time_bandwith_product, set_parameters_ladder,
-                              calculate_pulse_energy, check_fdm)
+from quantum_memories import (time_bandwith_product)
+from quantum_memories.orca import (set_parameters_ladder,
+                                   calculate_pulse_energy, check_fdm)
 
 from scipy.constants import c
 
