@@ -169,11 +169,11 @@ def impose_boundary(Wp, tau, S0t, S0z, B0z, P0z=None, sparse=False):
         aux[1+ex, 0, :] = 2
 
         # We set up B(tau, Z=-D/2)
-        Xb_[0+ex, :, 0] = zero_bound
-        aux[0+ex, :, 0] = 3
-        # We set up B(tau, Z=+D/2)
-        Xb_[0+ex, :, -1] = zero_bound
-        aux[0+ex, :, -1] = 4
+        # Xb_[0+ex, :, 0] = zero_bound
+        # aux[0+ex, :, 0] = 3
+        # # We set up B(tau, Z=+D/2)
+        # Xb_[0+ex, :, -1] = zero_bound
+        # aux[0+ex, :, -1] = 4
         # We set up S(tau, Z=-D/2)
         Xb_[1+ex, :, 0] = S0t
         aux[1+ex, :, 0] = 5

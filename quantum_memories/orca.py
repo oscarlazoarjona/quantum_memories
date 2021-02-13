@@ -1452,6 +1452,8 @@ def solve_fdm(params, S0t=None, S0z=None, B0z=None, P0z=None, Omegat="square",
         S03z = S[Nt1+Nt2-2, :]
         if seed == "S":
             S03t = hermite_gauss(nshg, tau3 - t0s + D/c, sigs)
+        elif S0t is not None:
+            S03t = S0t[Nt1+Nt2-2:]
         else:
             S03t = np.zeros(Nt3, complex)
 
