@@ -789,7 +789,7 @@ def calculate_optimal_input_xi(params, xi=None, force_xi0=False,
         mes += " Set force_xi0=True to override this (but don't Fourier"
         mes += " transform into input for a z-space problem, please). "
         mes += "The best thing is to set "
-        mes += "`params[delta2] = calculate_optimal_delta2[params]`"
+        mes += "`params[delta2] = calculate_optimal_delta2(params)`"
         warnings.warn(mes)
         # warnings.filterwarnings('ignore', mes)
         xi0 = 0.0
@@ -804,7 +804,7 @@ def calculate_optimal_input_xi(params, xi=None, force_xi0=False,
     return xi, Sin
 
 
-def calculate_optimal_input_Z(params, Z=None):
+def calculate_optimal_input_Z(params, Z=None, with_critical_energy=True):
     r"""Calculate the optimal `Z`-space input for the given parameters.
 
     Note this returns a Gaussian pulse of time duration params["taus"]
@@ -826,7 +826,8 @@ def calculate_optimal_input_Z(params, Z=None):
     a2 = xi0-20*Deltaxi/2
     aa = np.amax(np.abs(np.array([a1, a2])))
     xi = np.linspace(-aa, aa, 1001)
-    xi, S0xi = calculate_optimal_input_xi(params, xi)
+    kwargs = {"with_critical_energy": with_critical_energy}
+    xi, S0xi = calculate_optimal_input_xi(params, xi, **kwargs)
 
     # We Fourier transform it.
     Z = ffftfreq(xi)
@@ -866,7 +867,7 @@ def calculate_optimal_input_Z(params, Z=None):
         return Z, S0Z
 
 
-def calculate_optimal_input_tau(params, tau=None):
+def calculate_optimal_input_tau(params, tau=None, with_critical_energy=True):
     r"""Calculate the optimal `tau`-space input for the given parameters.
 
     Note this returns a Gaussian pulse of time duration params["taus"]
@@ -880,7 +881,8 @@ def calculate_optimal_input_tau(params, tau=None):
     kappa = calculate_kappa(params)
     Gamma21 = calculate_Gamma21(params)
 
-    Z, S0Z = calculate_optimal_input_Z(params)
+    kwargs = {"with_critical_energy": with_critical_energy}
+    Z, S0Z = calculate_optimal_input_Z(params, **kwargs)
     S0Z_interp = interpolator(Z, S0Z, kind="cubic")
 
     D = params["L"]*1.05
