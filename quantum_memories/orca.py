@@ -943,44 +943,55 @@ def eqs_fdm(params, tau, Z, Omegat="square", case=0, adiabatic=True,
                   "sparse": sparse}
         DT, DZ = fdm_derivative_operators(*args, **kwargs)
 
+    # We calculate Omega(tau, z) as an array, and then as a flattened,
+    # diagonal matrix.
+    w0Xi = params["w2"]
+    zRS, zRXi = rayleigh_range(params)
+    wXi = w0Xi*np.sqrt(1 + (Z/zRXi)**2)
+
+    Omegaz = Omega*w0Xi/wXi
+    Omegatauz = np.outer(np.ones(Nt), Omegaz).flatten()
+
     if sparse:
         eye = sp_eye(Ntz, format=bfmt)
-        Wp = bfmtf((nX, nX), dtype=np.complex128)
+        A = bfmtf((nX, nX), dtype=np.complex128)
+        Omega = spdiags(Omegatauz, [0], Ntz, Ntz, format=bfmt)
     else:
         eye = np.eye(Ntz)
-        Wp = np.zeros((nX, nX), complex)
+        A = np.zeros((nX, nX), complex)
+        Omega = np.diag(Omegatauz)
 
-    # We build the Wp matrix.
+    # We build the A matrix.
     if True:
         # Empty space.
         if case == 0 and adiabatic:
             # We set the time derivatives.
-            Wp = set_block(Wp, 0, 0, DT)
-            Wp = set_block(Wp, 1, 1, DT)
+            A = set_block(A, 0, 0, DT)
+            A = set_block(A, 1, 1, DT)
 
             # We set the right-hand side terms.
-            Wp = set_block(Wp, 0, 0, Gamma32*eye)
-            Wp = set_block(Wp, 1, 1, c/2*DZ)
+            A = set_block(A, 0, 0, Gamma32*eye)
+            A = set_block(A, 1, 1, c/2*DZ)
         # Storage phase.
         elif case == 1 and adiabatic:
             # We set the time derivatives.
-            Wp = set_block(Wp, 0, 0, DT)
-            Wp = set_block(Wp, 1, 1, DT)
+            A = set_block(A, 0, 0, DT)
+            A = set_block(A, 1, 1, DT)
 
             # We set the right-hand side terms.
-            Wp = set_block(Wp, 0, 0, Gamma32*eye)
-            Wp = set_block(Wp, 1, 1, c*kappa**2/2/Gamma21*eye)
-            Wp = set_block(Wp, 1, 1, c/2*DZ)
+            A = set_block(A, 0, 0, Gamma32*eye)
+            A = set_block(A, 1, 1, c*kappa**2/2/Gamma21*eye)
+            A = set_block(A, 1, 1, c/2*DZ)
         # Memory write/read phase.
         elif case == 2 and adiabatic:
             # We set the time derivatives.
-            Wp = set_block(Wp, 0, 0, DT)
-            Wp = set_block(Wp, 1, 1, DT)
+            A = set_block(A, 0, 0, DT)
+            A = set_block(A, 1, 1, DT)
 
             # We set the right-hand side terms.
-            Wp = set_block(Wp, 0, 0, Gamma32*eye)
-            Wp = set_block(Wp, 1, 1, c*kappa**2/2/Gamma21*eye)
-            Wp = set_block(Wp, 1, 1, c/2*DZ)
+            A = set_block(A, 0, 0, Gamma32*eye)
+            A = set_block(A, 1, 1, c*kappa**2/2/Gamma21*eye)
+            A = set_block(A, 1, 1, c/2*DZ)
 
             if hasattr(Omegat, "__call__"):
                 def Wpt(t):
@@ -994,55 +1005,56 @@ def eqs_fdm(params, tau, Z, Omegat="square", case=0, adiabatic=True,
                     aux1 = np.abs(Omegatm)**2/Gamma21
                     aux2 = kappa*Omegatm/Gamma21
                     aux3 = c*kappa*np.conjugate(Omegatm)/2/Gamma21
-                    Wp_ = Wp.copy()
-                    Wp_ = set_block(Wp_, 0, 0, aux1)
-                    Wp_ = set_block(Wp_, 0, 1, aux2)
-                    Wp_ = set_block(Wp_, 1, 0, aux3)
-                    return Wp_
+                    A_ = A.copy()
+                    A_ = set_block(A_, 0, 0, aux1)
+                    A_ = set_block(A_, 0, 1, aux2)
+                    A_ = set_block(A_, 1, 0, aux3)
+                    return A_
 
             else:
                 aux1 = np.abs(Omega)**2/Gamma21
                 aux2 = kappa*Omega/Gamma21
                 aux3 = c*kappa*np.conjugate(Omega)/2/Gamma21
-                Wp = set_block(Wp, 0, 0, aux1*eye)
-                Wp = set_block(Wp, 0, 1, aux2*eye)
-                Wp = set_block(Wp, 1, 0, aux3*eye)
+
+                A = set_block(A, 0, 0, aux1)
+                A = set_block(A, 0, 1, aux2)
+                A = set_block(A, 1, 0, aux3)
 
         elif case == 0 and not adiabatic:
             # We set the time derivatives.
-            Wp = set_block(Wp, 0, 0, DT)
-            Wp = set_block(Wp, 1, 1, DT)
-            Wp = set_block(Wp, 2, 2, DT)
+            A = set_block(A, 0, 0, DT)
+            A = set_block(A, 1, 1, DT)
+            A = set_block(A, 2, 2, DT)
 
             # We set the right-hand side terms.
-            Wp = set_block(Wp, 0, 0, Gamma21*eye)
-            Wp = set_block(Wp, 1, 1, Gamma32*eye)
-            Wp = set_block(Wp, 2, 2, c/2*DZ)
+            A = set_block(A, 0, 0, Gamma21*eye)
+            A = set_block(A, 1, 1, Gamma32*eye)
+            A = set_block(A, 2, 2, c/2*DZ)
 
         elif case == 1 and not adiabatic:
             # We set the time derivatives.
-            Wp = set_block(Wp, 0, 0, DT)
-            Wp = set_block(Wp, 1, 1, DT)
-            Wp = set_block(Wp, 2, 2, DT)
+            A = set_block(A, 0, 0, DT)
+            A = set_block(A, 1, 1, DT)
+            A = set_block(A, 2, 2, DT)
 
             # We set the right-hand side terms.
-            Wp = set_block(Wp, 0, 0, Gamma21*eye)
-            Wp = set_block(Wp, 1, 1, Gamma32*eye)
-            Wp = set_block(Wp, 2, 2, c/2*DZ)
-            Wp = set_block(Wp, 0, 2, 1j*kappa*eye)
-            Wp = set_block(Wp, 2, 0, 1j*kappa*c/2*eye)
+            A = set_block(A, 0, 0, Gamma21*eye)
+            A = set_block(A, 1, 1, Gamma32*eye)
+            A = set_block(A, 2, 2, c/2*DZ)
+            A = set_block(A, 0, 2, 1j*kappa*eye)
+            A = set_block(A, 2, 0, 1j*kappa*c/2*eye)
         elif case == 2 and not adiabatic:
             # We set the time derivatives.
-            Wp = set_block(Wp, 0, 0, DT)
-            Wp = set_block(Wp, 1, 1, DT)
-            Wp = set_block(Wp, 2, 2, DT)
+            A = set_block(A, 0, 0, DT)
+            A = set_block(A, 1, 1, DT)
+            A = set_block(A, 2, 2, DT)
 
             # We set the right-hand side terms.
-            Wp = set_block(Wp, 0, 0, Gamma21*eye)
-            Wp = set_block(Wp, 1, 1, Gamma32*eye)
-            Wp = set_block(Wp, 2, 2, c/2*DZ)
-            Wp = set_block(Wp, 0, 2, 1j*kappa*eye)
-            Wp = set_block(Wp, 2, 0, 1j*kappa*c/2*eye)
+            A = set_block(A, 0, 0, Gamma21*eye)
+            A = set_block(A, 1, 1, Gamma32*eye)
+            A = set_block(A, 2, 2, c/2*DZ)
+            A = set_block(A, 0, 2, 1j*kappa*eye)
+            A = set_block(A, 2, 0, 1j*kappa*c/2*eye)
 
             if hasattr(Omegat, "__call__"):
                 def Wpt(t):
@@ -1054,14 +1066,14 @@ def eqs_fdm(params, tau, Z, Omegat="square", case=0, adiabatic=True,
                     else:
                         Omegatm = np.kron(np.diag(Omegat(t)), np.eye(Nz))
                     aux = np.conjugate(Omegatm)
-                    Wp_ = Wp.copy()
-                    Wp_ = set_block(Wp_, 0, 1, 1j*aux)
-                    Wp_ = set_block(Wp_, 1, 0, 1j*Omegatm)
-                    return Wp_
+                    A_ = A.copy()
+                    A_ = set_block(A_, 0, 1, 1j*aux)
+                    A_ = set_block(A_, 1, 0, 1j*Omegatm)
+                    return A_
             else:
                 aux = 1j*np.conjugate(Omega)
-                Wp = set_block(Wp, 0, 1, aux*eye)
-                Wp = set_block(Wp, 1, 0, 1j*Omega*eye)
+                A = set_block(A, 0, 1, aux*eye)
+                A = set_block(A, 1, 0, 1j*Omega*eye)
 
     if hasattr(Omegat, "__call__"):
         return Wpt
@@ -1070,12 +1082,12 @@ def eqs_fdm(params, tau, Z, Omegat="square", case=0, adiabatic=True,
             ################################################################
             # Plotting Wp.
             plt.figure(figsize=(15, 15))
-            plt.title("$W'$")
-            plt.imshow(np.log(np.abs(Wp)))
-            plt.savefig(folder+"Wp.png", bbox_inches="tight")
+            plt.title("$A'$")
+            plt.imshow(np.log(np.abs(A)))
+            plt.savefig(folder+"A.png", bbox_inches="tight")
             plt.close("all")
 
-        return Wp
+        return A
 
 
 # def solve_fdm_subblock(params, Wp, S0t, S0z, B0z, tau, Z,
