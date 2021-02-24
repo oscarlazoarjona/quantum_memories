@@ -169,7 +169,7 @@ def falling_exponential(x, gamma, a=None, simp=False):
 
 
 def gaussian_square(n, t, fwhm):
-    u"""We obtain a normalized function of the form
+    """We obtain a normalized function of the form
 
          2⋅n
       ⎛t⎞
@@ -182,7 +182,9 @@ def gaussian_square(n, t, fwhm):
     with the given (amplitude square) fwhm.
     """
     if str(n) == "oo":
-        return heaviside_pi(t/fwhm)
+        return heaviside_pi(t/fwhm)/np.sqrt(fwhm)
+    elif n < 1:
+        raise ValueError
     else:
         tau = fwhm*np.log(2)**(-1/(2.0*n))/2
         X = t/tau
@@ -509,8 +511,8 @@ def build_mesh_fdm(params, verbose=0):
         ratio1 = float(NtOmega)/float(Nz)
         ratio2 = float(Nz)/float(NtOmega)
 
-        mes = "The control field region has {} x {} = {} =? {} points"
-        print(mes.format(Nt2, Nz, Nt2*Nz, N**2))
+        mes = "The control field region has {} x {} = {} =? {} = {}^2 points"
+        print(mes.format(Nt2, Nz, Nt2*Nz, N**2, N))
         mes = "The W matrix for the control region would be "
         mes += "(2 x {})^2 = {} points"
         aux = Nt2*Nz
