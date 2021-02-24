@@ -258,3 +258,16 @@ def plot_inout(tau, Z, Bw, Sw, Br, Sr, folder, name):
     ax11.legend(loc=0, fontsize=fs-2)
 
     fig.savefig(folder+name+".png", bbox_inches="tight")
+    plt.close("all")
+
+
+def plot_Omegatz(params, Omegatz, tau2, Z, folder, name):
+    r"""Make a plot of the Rabi frequency."""
+    fig, ax = plt.subplots(figsize=(8, 6))
+    cb = plt.pcolormesh(Z*100, tau2*1e9, np.abs(Omegatz)/2/np.pi*1e-9,
+                        shading="auto", vmin=0)
+    plt.colorbar(cb, label=r"$|\Xi|$  [GHz]")
+    plt.ylabel(r"$\tau$ (ns)")
+    plt.xlabel("$Z$ (cm)")
+    plt.savefig(folder+name+".png", bbox_inches="tight")
+    plt.close("all")

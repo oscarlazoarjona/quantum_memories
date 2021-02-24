@@ -593,7 +593,7 @@ def print_params(params):
 
 
 def calculate_Omega(params):
-    r"""Calculate the effective (time averaged) Rabi frequency."""
+    r"""Calculate the effective Rabi frequency."""
     energy_pulse2 = params["energy_pulse2"]
     hbar = params["hbar"]
     e_charge = params["e_charge"]
@@ -611,6 +611,28 @@ def calculate_Omega(params):
     Omega = np.sqrt(Omega)
 
     return Omega
+
+
+def calculate_Omegatz(params, Omegat, tau2, Z):
+    r"""Calculate the Rabi frequency as a function of tau and z."""
+    Omega0 = calculate_Omega(params)
+    w2 = params["w2"]
+    with_focusing = params["with_focusing"]
+    Nt2 = len(tau2)
+    Nz = len(Z)
+    if with_focusing:
+        zRS, zRXi = rayleigh_range(params)
+        wz = w2*np.sqrt(1 + (Z/zRXi)**2)
+        wz = np.outer(np.ones(Nt2), wz)
+    else:
+        wz = w2*np.ones((Nt2, Nz))
+
+    if Omegat == "square":
+        Omega = Omega0*np.ones((Nt2, Nz))
+    else:
+        Omega = np.outer(Omegat(tau2), np.ones(Nz))
+
+    return Omega*w2/wz
 
 
 def calculate_power(params, Omega):
