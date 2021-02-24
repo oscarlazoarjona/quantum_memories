@@ -14,6 +14,7 @@ from sympy import sinc as sinc_sym
 from sympy import Basic, Piecewise, Abs, sin
 from scipy.constants import k as k_B
 from scipy.constants import c
+from scipy.special import gamma as gamma_function
 
 
 def rel_error(a, b):
@@ -165,6 +166,28 @@ def falling_exponential(x, gamma, a=None, simp=False):
         else:
             return Piecewise(*[(f, x >= 0), (0, True)])
     return np.where(x >= 0, np.sqrt(gamma)*np.exp(-gamma*x/2), 0.0)
+
+
+def gaussian_square(n, t, fwhm):
+    u"""We obtain a normalized function of the form
+
+         2⋅n
+      ⎛t⎞
+     -⎜─⎟
+      ⎝τ⎠
+     ────────
+        2
+    ℯ
+
+    with the given (amplitude square) fwhm.
+    """
+    if str(n) == "oo":
+        return heaviside_pi(t/fwhm)
+    else:
+        tau = fwhm*np.log(2)**(-1/(2.0*n))/2
+        X = t/tau
+        norm = np.sqrt(2*tau*gamma_function(1 + 1/(2.0*n)))
+        return np.exp(-X**(2*n)/2)/norm
 
 
 def sinc(x):
