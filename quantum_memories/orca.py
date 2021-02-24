@@ -155,7 +155,8 @@ def set_parameters_ladder(custom_parameters=None, fitted_couplings=True,
            "nshg": nshg, "nwhg": nwhg, "nrhg": nrhg,
            "nssquare": nssquare, "nwsquare": nwsquare, "nrsquare": nrsquare,
            "ntauw": 1.0, "N": 101,
-           "pumping": 0.0}
+           "pumping": 0.0,
+           "with_focusing": True}
     # NOTE: if an independent parameter is added here, it must also
     # be added in the next block of code to update it.
 
@@ -311,7 +312,10 @@ def set_parameters_ladder(custom_parameters=None, fitted_couplings=True,
                 nrsquare = custom_parameters["ntauw"]
             if "pumping" in custom_parameters.keys():
                 pms["pumping"] = custom_parameters["pumping"]
-                nrsquare = custom_parameters["pumping"]
+                # pumping = custom_parameters["pumping"]
+            if "with_focusing" in custom_parameters.keys():
+                pms["with_focusing"] = custom_parameters["with_focusing"]
+                # with_focusing = custom_parameters["with_focusing"]
     #########################################################################
 
     if calculate_atom:
@@ -535,7 +539,6 @@ def print_params(params):
     # Nz = params["Nz"]
     # T = params["T"]
     L = params["L"]
-    # D = L*1.05
     # hbar = params["hbar"]
     # epsilon_0 = params["epsilon_0"]
     # e_charge = params["e_charge"]
@@ -885,14 +888,53 @@ def calculate_optimal_input_tau(params, tau=None, with_critical_energy=True):
     Z, S0Z = calculate_optimal_input_Z(params, **kwargs)
     S0Z_interp = interpolator(Z, S0Z, kind="cubic")
 
-    D = params["L"]*1.05
+    L = params["L"]
     tau0 = params["t0w"] - params["tauw"]/2
 
-    S0tau = S0Z_interp(-D/2 - c*(tau-tau0)/2)
+    S0tau = S0Z_interp(-L/2 - c*(tau-tau0)/2)
     S0tau = S0tau*np.exp(-c*kappa**2*(tau-tau0)/(2*Gamma21))
     S0tau = S0tau/np.sqrt(num_integral(np.abs(S0tau)**2, tau))
 
     return tau, S0tau
+
+
+def approximate_optimal_input(params, tau=None, Z=None):
+    r"""Get optimal input."""
+    c = params["c"]
+    xi0 = calculate_xi0(params)
+    Zoff = params["tauw"]/2*(c/2)
+    kappa0 = calculate_kappa(params)
+    Gamma21 = calculate_Gamma21(params)
+    L = params["L"]
+
+    taus = params["taus"]
+    DeltanuS_num = time_bandwith_product(1)/taus
+    DeltaxiS_num = DeltanuS_num*2/c
+    sig_xi = DeltaxiS_num/(2*np.sqrt(np.log(2)))
+    sig_t = 1/2/np.pi/sig_xi
+
+    t0 = params["t0w"] - params["tauw"]/2
+
+    if not params["USE_SQUARE_CTRL"] or str(params["nwsquare"]) != "oo":
+        mes = 'USE_SQUARE_CTRL must be True, and "nwsquare" must be "oo".'
+        raise ValueError(mes)
+    if tau is None:
+        tau = build_t_mesh(params)
+    if Z is None:
+        Z = build_Z_mesh(params)
+
+    tau0 = -c*t0/2 + L/2 - Zoff
+    S0t = np.exp(2*1j*np.pi*xi0*(-c*tau/2-tau0))
+    S0t *= hermite_gauss(0, -c*tau/2 - tau0, sig_t)
+    S0t *= np.exp(-c*kappa0**2*(tau-t0)/(2*Gamma21))*np.sqrt(c/2)
+
+    tau0 = -c*t0/2 - Z - Zoff
+    tau_ini = tau[0]
+    S0z = np.exp(2*1j*np.pi*xi0*(-c*tau_ini/2-tau0))
+    S0z *= hermite_gauss(0, -c*tau_ini/2 - tau0, sig_t)
+    S0z *= np.exp(-c*kappa0**2*(tau_ini-t0)/(2*Gamma21))*np.sqrt(c/2)
+
+    return S0t, S0z, tau, Z
 
 
 def calculate_pulse_energy(params, order=0):
@@ -929,6 +971,7 @@ def eqs_fdm(params, tau, Z, Omegat="square", case=0, adiabatic=True,
         nv = 2
     # We unpack parameters.
     if True:
+        with_focusing = params["with_focusing"]
         Nt = tau.shape[0]
         Nz = Z.shape[0]
         Gamma21 = calculate_Gamma21(params)
@@ -951,7 +994,10 @@ def eqs_fdm(params, tau, Z, Omegat="square", case=0, adiabatic=True,
     zRS, zRXi = rayleigh_range(params)
     wXi = w0Xi*np.sqrt(1 + (Z/zRXi)**2)
 
-    Omegaz = Omega*w0Xi/wXi
+    if with_focusing:
+        Omegaz = Omega*w0Xi/wXi
+    else:
+        Omegaz = Omega*np.ones(Nz)
     Omegatauz = np.outer(np.ones(Nt), Omegaz).flatten()
 
     if sparse:
@@ -1419,12 +1465,22 @@ def solve(params, S0t=None, S0z=None, B0z=None, P0z=None, Omegat="square",
             nshg = nshg + 1
             B_exact1 = harmonic(nshg, ZZ1, D)
             B[:Nt1, :] = B_exact1
-        elif S0t is not None or B0z is not None:
+        elif S0t is not None or S0z is not None or B0z is not None:
             if S0t is not None:
                 S0t_interp = interpolator(tau, S0t, kind="cubic")
                 S_exact1 = S0t_interp(ttau1 - 2*(ZZ1+D/2)/c)
                 S_exact1 = S_exact1*np.exp(-(ZZ1+D/2)*kappa**2/Gamma21)
-                S[:Nt1, :] = S_exact1
+                S[:Nt1, 1:] += S_exact1[:, 1:]
+                S[:, 0] = S0t
+            if S0z is not None:
+                t00 = params["t0w"] - params["tauw"]/2
+                S0z_interp = interpolator(Z, S0z, kind="cubic")
+                S_exact2 = S0z_interp(ZZ1-c/2*(ttau1-tau1[0]))
+                S_exact2 *= np.exp(-c*kappa**2*(ttau1-t00)/(2*Gamma21))
+
+                S[:Nt1, 1:] += S_exact2[:, 1:]
+                S[0, :] = S0z
+
             if B0z is not None:
                 B_exact1 = np.outer(np.ones(Nt1), B0z)
                 B[:Nt1, :] = B_exact1

@@ -30,7 +30,7 @@ if True:
     # The cell to control pulse ratio at half light-speed.
     lp = 2*l
     tauw = 300e-12
-    D = lp*tauw*c/2
+    L = lp*tauw*c/2
     ########################################################################
     # The bandwidth of the control pulse is chosen so that it is a
     # Fourier-limited square pulse with intensity FWHM in time tauw.
@@ -46,7 +46,7 @@ if True:
               "sigma_power1": sigma_power1,
               "sigma_power2": sigma_power2,
               "Temperature": 273.15 + 115,
-              "L": D/1.05,
+              "L": D,
               "w1": 131e-6,
               "w2": 131e-6,
               "delta1": 9.0*1e9*2*np.pi,

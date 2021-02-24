@@ -399,15 +399,11 @@ def build_t_mesh(params, uniform=True, return_bounds=False):
     return t
 
 
-def build_Z_mesh(params, uniform=True, on_cell_edge=False):
+def build_Z_mesh(params, uniform=True):
     r"""Return a Z mesh for a given cell length and number of points."""
     L = params["L"]
     Nz = params["Nz"]
-    if on_cell_edge:
-        D = L*1.0
-    else:
-        D = L*1.05
-    Z = np.linspace(-D/2, D/2, Nz)
+    Z = np.linspace(-L/2, L/2, Nz)
     return Z
 
 
