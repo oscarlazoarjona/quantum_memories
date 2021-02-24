@@ -7,6 +7,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 from matplotlib.colors import LogNorm
 from quantum_memories.misc import build_t_mesh, build_Z_mesh
+from scipy.constants import c
 
 
 def sketch_frame_transform(params, folder="", name="sketch",
@@ -206,3 +207,54 @@ def plot_solution(tau, Z, B, S, folder, name,
     plt.xlabel("$Z$ (cm)")
     plt.savefig(folder+name+".png", bbox_inches="tight")
     plt.close("all")
+
+
+def plot_inout(tau, Z, Bw, Sw, Br, Sr, folder, name):
+    r"""Make a plot of the input and output signal."""
+    L = Z[-1] - Z[0]
+    tau_iniS = tau[0]
+    tau_iniQ = tau_iniS - L*2/c
+    tauQ0 = (tau_iniS-tau_iniQ)/(Z[0]-Z[-1])*(Z-Z[0]) + tau_iniS
+
+    tau_finS = tau[-1]
+    tau_finQ = tau_finS + L*2/c
+    tauQf = (tau_finS-tau_finQ)/(Z[-1]-Z[0])*(Z-Z[-1]) + tau_finS
+
+    angle1 = np.unwrap(np.angle(Sw[:, 0]))/2/np.pi
+    angle1Q = np.unwrap(np.angle(Sw[0, :]))/2/np.pi
+
+    angle2 = np.unwrap(np.angle(Sw[:, -1]))/2/np.pi
+    angle2Q = np.unwrap(np.angle(Sw[-1, :]))/2/np.pi
+
+    angle3 = np.unwrap(np.angle(Sr[:, -1]))/2/np.pi
+
+    ###############################################################
+    fig, ax11 = plt.subplots(figsize=(8, 6))
+    fs = 15
+    ax32 = ax11.twinx()
+    ax11.plot(tau*1e9, np.abs(Sw[:, 0])**2*1e-9, "b-",
+              label=r"$S_{in}(\tau)$")
+
+    ax11.plot(tauQ0*1e9, np.abs(Sw[0, :])**2*1e-9, "b-")
+
+    ax11.plot(tau*1e9, np.abs(Sw[:, -1])**2*1e-9, "r-",
+              label=r"$S_{leak}(\tau)$")
+    ax11.plot(tauQf*1e9, np.abs(Sw[-1, :])**2*1e-9, "r-")
+    tau_offset = tau[-1] - tau[0]
+    ax11.plot((tau+tau_offset)*1e9, np.abs(Sr[:, -1])**2*1e-9,
+              "g-", label=r"$S_{out}(\tau)$")
+
+    ax32.plot(tau*1e9, angle1, "b:")
+    ax32.plot(tauQ0*1e9, angle1Q, "b:")
+
+    ax32.plot(tau*1e9, angle2, "r:")
+    ax32.plot(tauQf*1e9, angle2Q, "r:")
+    ax32.plot((tau+tau_offset)*1e9, angle3, "g:")
+
+    ax11.set_xlabel(r"$\tau$ [ns]", fontsize=fs)
+    ax11.set_ylabel(r"$|S|^2$  [1/ns]", fontsize=fs)
+    ax32.set_ylabel(r"Phase  [revolutions]", fontsize=fs)
+    # ax32.set_yticks([])
+    ax11.legend(loc=9, fontsize=fs-2)
+
+    fig.savefig(folder+name+".png", bbox_inches="tight")
