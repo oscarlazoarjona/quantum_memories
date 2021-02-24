@@ -613,6 +613,35 @@ def calculate_Omega(params):
     return Omega
 
 
+def calculate_power(params, Omega):
+    r"""Calculate the power of the given Rabi frequency."""
+    hbar = params["hbar"]
+    e_charge = params["e_charge"]
+    r2 = params["r2"]
+    w2 = params["w2"]
+
+    wz = w2
+
+    dim = len(np.array(Omega).shape)
+    if dim == 0:
+        wz = w2
+    elif dim == 1:
+        Z = build_Z_mesh(params)
+        if Omega.shape == Z.shape:
+            # We assume that Omega is given as a function of z.
+            zRS, zRXi = rayleigh_range(params)
+            wz = w2*np.sqrt(1 + (Z/zRXi)**2)
+        else:
+            wz = w2
+    elif dim == 2:
+        Nt = Omega.shape[0]
+        zRS, zRXi = rayleigh_range(params)
+        wz = w2*np.sqrt(1 + (Z/zRXi)**2)
+        wz = np.outer(np.ones(Nt), wz)
+
+    return np.pi/c/mu_0*(hbar*wz*np.abs(Omega)/e_charge/r2)**2
+
+
 def calculate_xi0(params):
     r"""Return xi0, the position of the peak for F(xi)."""
     if not params["USE_SQUARE_CTRL"] or str(params["nwsquare"]) != "oo":
