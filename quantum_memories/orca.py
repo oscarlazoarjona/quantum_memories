@@ -959,6 +959,56 @@ def calculate_pulse_energy(params, order=0):
     return aux
 
 
+def calculate_efficiencies(tau, Z, Bw, Sw, Br, Sr, verbose=0):
+    r"""Calculate the memory efficiencies for a given write-read
+    process.
+
+    These are the total memory efficiency, TB, RS, RB, TS.
+    """
+    L = Z[-1] - Z[0]
+    tau_iniS = tau[0]
+    tau_iniQ = tau_iniS - L*2/c
+    tauQ0 = (tau_iniS-tau_iniQ)/(Z[0]-Z[-1])*(Z-Z[0]) + tau_iniS
+
+    tau_finS = tau[-1]
+    tau_finQ = tau_finS + L*2/c
+    tauQf = (tau_finS-tau_finQ)/(Z[-1]-Z[0])*(Z-Z[-1]) + tau_finS
+
+    # The initial photon number.
+    NS = num_integral(np.abs(Sw[:, 0])**2, tau)
+    NS += num_integral(np.abs(Sw[0, :])**2, tauQ0)
+    # The transmitted photon number.
+    NST = num_integral(np.abs(Sw[:, -1])**2, tau)
+    NST += num_integral(np.abs(Sw[-1, :])**2, tauQf)
+    # The retrieved photon number.
+    Nf = num_integral(np.abs(Sr[:, -1])**2, tau)
+    Nf += num_integral(np.abs(Sr[-1, :])**2, tauQf)
+    # The initial spin-wave number.
+    NB = num_integral(np.abs(Br[0, :])**2, tau)
+    # The transmitted. spin-wave number.
+    NBT = num_integral(np.abs(Br[-1, :])**2, tau)
+
+    # Nt1 = tau1.shape[0]
+    # S0Z_num = Sw[Nt1-1, :]
+
+    TS = NST/NS
+    RS = 1 - TS
+
+    TB = NBT/NB
+    RB = 1 - TB
+
+    eta_num = Nf/NS
+
+    if verbose > 0:
+        print("Numerical efficiency      : {:.4f}".format(eta_num))
+        print("")
+        print("Beam-splitter picture transmissivities and reflectivities:")
+        print("TB: {:.4f}, RS: {:.4f}".format(TB, RS))
+        print("RB: {:.4f}, TS: {:.4f}".format(RB, TS))
+
+    return eta_num, TB, RS, RB, TS
+
+
 #############################################################################
 # Finite difference ORCA routines.
 

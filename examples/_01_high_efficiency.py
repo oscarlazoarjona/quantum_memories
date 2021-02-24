@@ -18,7 +18,9 @@ from quantum_memories.orca import (set_parameters_ladder,
                                    calculate_optimal_input_xi, num_integral,
                                    calculate_optimal_input_Z,
                                    calculate_optimal_input_tau,
+                                   calculate_efficiencies,
                                    solve)
+from quantum_memories.graphical import plot_inout
 from scipy.constants import c
 
 # We establish base parameters.
@@ -113,36 +115,16 @@ if calculate:
     tau, Z, Br, Sr = solve(params, **kwargs)
 # We calculate the Beam-splitter picture transmissivities and reflectivities.
 if calculate:
-    NS = num_integral(np.abs(Sw[:, 0])**2, tau)
-    NST = num_integral(np.abs(Sw[:, -1])**2, tau)
-
-    Nt1 = tau1.shape[0]
-    S0Z_num = Sw[Nt1-1, :]
-
-    TS = NST/NS
-    RS = 1 - TS
-
-    NB = num_integral(np.abs(Br[0, :])**2, tau)
-    NBT = num_integral(np.abs(Br[-1, :])**2, tau)
-    TB = NBT/NB
-    RB = 1 - TB
-
-    Nf = num_integral(np.abs(Sr[:, -1])**2, tau)
-    eta_num = Nf/NS
-
-    print("Numerical efficiency      : {:.4f}".format(eta_num))
-    print("")
-    print("Beam-splitter picture transmissivities and reflectivities:")
-    print("TB: {:.4f}, RS: {:.4f}".format(TB, RS))
-    print("RB: {:.4f}, TS: {:.4f}".format(RB, TS))
+    aux = calculate_efficiencies(tau, Z, Bw, Sw, Br, Sr, verbose=1)
+    eta_num, TB, RS, RB, TS = aux
 
     assert np.round(eta_ana, 4) == 0.7953
-    assert np.round(eta_num, 4) == 0.7902
+    assert np.round(eta_num, 4) == 0.7901
 
-    assert np.round(TB, 4) == 0.0922
-    assert np.round(RS, 4) == 0.8817
-    assert np.round(RB, 4) == 0.9078
-    assert np.round(TS, 4) == 0.1183
+    assert np.round(TB, 4) == 0.0998
+    assert np.round(RS, 4) == 0.8888
+    assert np.round(RB, 4) == 0.9002
+    assert np.round(TS, 4) == 0.1112
 # Save the results.
 if calculate:
     dump([tau, Z, Bw, Sw], open(folder+"solution_write.pickle", "wb"))
@@ -150,25 +132,8 @@ if calculate:
 if calculate and plots:
     fs = 15
     ######################################################################
-    fig, ax1 = plt.subplots()
-    ax2 = ax1.twinx()
-    ax1.plot(tau*1e9, np.abs(Sw[:, 0])**2*1e-9, "b-", label="Input")
-    ax1.plot(tau*1e9, np.abs(Sw[:, -1])**2*1e-9, "r-", label="Leaked")
-    ax1.plot(tau*1e9, np.abs(Sr[:, -1])**2*1e-9, "g-", label="Output")
+    plot_inout(tau, Z, Bw, Sw, Br, Sr, folder, "high_efficiency")
 
-    angle1 = np.unwrap(np.angle(Sw[:, 0]))/2/np.pi
-    angle2 = np.unwrap(np.angle(Sw[:, -1]))/2/np.pi
-    angle3 = np.unwrap(np.angle(Sr[:, -1]))/2/np.pi
-    ax2.plot(tau*1e9, angle1, "b:")
-    ax2.plot(tau*1e9, angle2, "r:")
-    ax2.plot(tau*1e9, angle3, "g:")
-
-    ax1.set_xlabel(r"$\tau \ [ns]$", fontsize=fs)
-    ax1.set_ylabel(r"$|S|^2$  [1/ns]", fontsize=fs)
-    ax2.set_ylabel(r"Phase  [revolutions]", fontsize=fs)
-    ax1.legend(loc=6)
-    plt.savefig(folder+"high_efficiency.png", bbox_inches="tight")
-    plt.close()
     ######################################################################
 
     fig, ax = plt.subplots(1, 1, figsize=(15, 8))

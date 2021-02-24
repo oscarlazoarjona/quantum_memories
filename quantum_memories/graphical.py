@@ -255,6 +255,6 @@ def plot_inout(tau, Z, Bw, Sw, Br, Sr, folder, name):
     ax11.set_ylabel(r"$|S|^2$  [1/ns]", fontsize=fs)
     ax32.set_ylabel(r"Phase  [revolutions]", fontsize=fs)
     # ax32.set_yticks([])
-    ax11.legend(loc=9, fontsize=fs-2)
+    ax11.legend(loc=0, fontsize=fs-2)
 
     fig.savefig(folder+name+".png", bbox_inches="tight")
