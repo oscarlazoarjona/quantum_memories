@@ -6,6 +6,7 @@ r"""Graphical routines."""
 import numpy as np
 from matplotlib import pyplot as plt
 from matplotlib.colors import LogNorm
+from matplotlib.gridspec import GridSpec
 from quantum_memories.misc import build_t_mesh, build_Z_mesh
 from scipy.constants import c
 
@@ -263,11 +264,48 @@ def plot_inout(tau, Z, Bw, Sw, Br, Sr, folder, name):
 
 def plot_Omegatz(params, Omegatz, tau2, Z, folder, name):
     r"""Make a plot of the Rabi frequency."""
-    fig, ax = plt.subplots(figsize=(8, 6))
-    cb = plt.pcolormesh(Z*100, tau2*1e9, np.abs(Omegatz)/2/np.pi*1e-9,
-                        shading="auto", vmin=0)
-    plt.colorbar(cb, label=r"$|\Xi|$  [GHz]")
-    plt.ylabel(r"$\tau$ (ns)")
-    plt.xlabel("$Z$ (cm)")
+    from quantum_memories.orca import calculate_Omega
+    from quantum_memories.misc import heaviside_pi
+    tauw = params["tauw"]
+    t0w = params["t0w"]
+    Nt, Nz = Omegatz.shape
+    Omegat = Omegatz[:, Nz//2]
+    Omegaz = Omegatz[Nt//2, :]
+    Omega0 = calculate_Omega(params)
+    tau2_cont = np.linspace(tau2[0], tau2[-1], 1001)
+    Omegat_equiv = Omega0*heaviside_pi((tau2_cont-t0w)/tauw)
+
+    fig = plt.figure(figsize=(9, 9))
+    xsizes = [1, 2]
+    ysizes = [1, 2]
+    # fig.patch.set_facecolor('xkcd:mint green')
+    gs1 = GridSpec(2, 2, height_ratios=ysizes, width_ratios=xsizes)
+    gs1.update(hspace=0.05, wspace=0.2)
+
+    ax01 = plt.subplot(gs1[0, 1])
+    ax10 = plt.subplot(gs1[1, 0])
+    ax11 = plt.subplot(gs1[1, 1])
+
+    ax01.set_xticks([])
+    ax11.set_yticks([])
+
+    ax01.plot(Z*1e2, np.abs(Omegaz)/2/np.pi*1e-9)
+    ax10.plot(np.abs(Omegat)/2/np.pi*1e-9, tau2*1e9, "r+")
+    ax10.plot(np.abs(Omegat_equiv)/2/np.pi*1e-9, tau2_cont*1e9)
+
+    ax01.set_ylim(0, None)
+    ax10.invert_xaxis()
+
+    cb = ax11.pcolormesh(Z*100, tau2*1e9, np.abs(Omegatz)/2/np.pi*1e-9,
+                         shading="auto", vmin=0)
+    fig.colorbar(cb, label=r"$|\Xi|$  [GHz]", ax=ax10)
+
+    ax10.set_ylim(tau2[0]*1e9, tau2[-1]*1e9)
+    ax01.set_xlim(Z[0]*1e2, Z[-1]*1e2)
+
+    ax01.set_ylabel(r"$|\Xi|$ [GHz]")
+    ax10.set_ylabel(r"$\tau$ (ns)")
+    ax10.set_xlabel(r"$|\Xi|$ [GHz]")
+    ax11.set_xlabel("$Z$ [cm]")
     plt.savefig(folder+name+".png", bbox_inches="tight")
     plt.close("all")
