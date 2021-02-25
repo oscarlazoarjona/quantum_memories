@@ -1099,7 +1099,13 @@ def eqs_fdm(params, tau, Z, Omegat="square", case=0, adiabatic=True,
         Omegaz = Omega*w0Xi/wXi
     else:
         Omegaz = Omega*np.ones(Nz)
-    Omegatauz = np.outer(np.ones(Nt), Omegaz).flatten()
+
+    if Omegat == "square":
+        Omegatauz = np.outer(np.ones(Nt), Omegaz).flatten()
+    elif with_focusing:
+        Omegatauz = np.outer(Omegat(tau), w0Xi/wXi).flatten()
+    else:
+        Omegatauz = np.outer(Omegat(tau), np.ones(Nz)).flatten()
 
     if sparse:
         eye = sp_eye(Ntz, format=bfmt)
@@ -1142,32 +1148,32 @@ def eqs_fdm(params, tau, Z, Omegat="square", case=0, adiabatic=True,
             A = set_block(A, 1, 1, c*kappa**2/2/Gamma21*eye)
             A = set_block(A, 1, 1, c/2*DZ)
 
-            if hasattr(Omegat, "__call__"):
-                def Wpt(t):
-                    if sparse:
-                        aux1 = Omegat(t)
-                        aux1 = spdiags(aux1, 0, Nt, Nt, format=bfmt)
-                        aux2 = sp_eye(Nz, format=bfmt)
-                        Omegatm = sp_kron(aux1, aux2, format=bfmt)
-                    else:
-                        Omegatm = np.kron(np.diag(Omegat(t)), np.eye(Nz))
-                    aux1 = np.abs(Omegatm)**2/Gamma21
-                    aux2 = kappa*Omegatm/Gamma21
-                    aux3 = c*kappa*np.conjugate(Omegatm)/2/Gamma21
-                    A_ = A.copy()
-                    A_ = set_block(A_, 0, 0, aux1)
-                    A_ = set_block(A_, 0, 1, aux2)
-                    A_ = set_block(A_, 1, 0, aux3)
-                    return A_
+            # if hasattr(Omegat, "__call__"):
+            #     def Wpt(t):
+            #         if sparse:
+            #             aux1 = Omegat(t)
+            #             aux1 = spdiags(aux1, 0, Nt, Nt, format=bfmt)
+            #             aux2 = sp_eye(Nz, format=bfmt)
+            #             Omegatm = sp_kron(aux1, aux2, format=bfmt)
+            #         else:
+            #             Omegatm = np.kron(np.diag(Omegat(t)), np.eye(Nz))
+            #         aux1 = np.abs(Omegatm)**2/Gamma21
+            #         aux2 = kappa*Omegatm/Gamma21
+            #         aux3 = c*kappa*np.conjugate(Omegatm)/2/Gamma21
+            #         A_ = A.copy()
+            #         A_ = set_block(A_, 0, 0, aux1)
+            #         A_ = set_block(A_, 0, 1, aux2)
+            #         A_ = set_block(A_, 1, 0, aux3)
+            #         return A_
+            #
+            # else:
+            aux1 = np.abs(Omega)**2/Gamma21
+            aux2 = kappa*Omega/Gamma21
+            aux3 = c*kappa*np.conjugate(Omega)/2/Gamma21
 
-            else:
-                aux1 = np.abs(Omega)**2/Gamma21
-                aux2 = kappa*Omega/Gamma21
-                aux3 = c*kappa*np.conjugate(Omega)/2/Gamma21
-
-                A = set_block(A, 0, 0, aux1)
-                A = set_block(A, 0, 1, aux2)
-                A = set_block(A, 1, 0, aux3)
+            A = set_block(A, 0, 0, aux1)
+            A = set_block(A, 0, 1, aux2)
+            A = set_block(A, 1, 0, aux3)
 
         elif case == 0 and not adiabatic:
             # We set the time derivatives.
@@ -1224,19 +1230,19 @@ def eqs_fdm(params, tau, Z, Omegat="square", case=0, adiabatic=True,
                 A = set_block(A, 0, 1, aux*eye)
                 A = set_block(A, 1, 0, 1j*Omega*eye)
 
-    if hasattr(Omegat, "__call__"):
-        return Wpt
-    else:
-        if plots:
-            ################################################################
-            # Plotting Wp.
-            plt.figure(figsize=(15, 15))
-            plt.title("$A'$")
-            plt.imshow(np.log(np.abs(A)))
-            plt.savefig(folder+"A.png", bbox_inches="tight")
-            plt.close("all")
+    # if hasattr(Omegat, "__call__"):
+    #     return Wpt
+    # else:
+    if plots:
+        ################################################################
+        # Plotting Wp.
+        plt.figure(figsize=(15, 15))
+        plt.title("$A'$")
+        plt.imshow(np.log(np.abs(A)))
+        plt.savefig(folder+"A.png", bbox_inches="tight")
+        plt.close("all")
 
-        return A
+    return A
 
 
 # def solve_fdm_subblock(params, Wp, S0t, S0z, B0z, tau, Z,
