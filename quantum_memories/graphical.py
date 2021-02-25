@@ -289,12 +289,17 @@ def plot_Omegatz(params, Omegatz, tau2, Z, folder, name):
     ax01.set_xticks([])
     ax11.set_yticks([])
 
-    ax01.plot(Z*1e2, np.abs(Omegaz)/2/np.pi*1e-9)
-    ax10.plot(np.abs(Omegat)/2/np.pi*1e-9, tau2*1e9, "r+")
-    ax10.plot(np.abs(Omegat_equiv)/2/np.pi*1e-9, tau2_cont*1e9)
+    lab = r"$|\Xi(\tau=0, Z)|$"
+    ax01.plot(Z*1e2, np.abs(Omegaz)/2/np.pi*1e-9, "r", label=lab)
+    lab = r"$|\Xi(\tau, Z=0)|$"
+    ax10.plot(np.abs(Omegat)/2/np.pi*1e-9, tau2*1e9, "r", label=lab)
+    ax10.plot(np.abs(Omegat_equiv)/2/np.pi*1e-9, tau2_cont*1e9,
+              "k-", alpha=0.5, label=r"$|\Xi_{\mathrm{equiv}}|$")
 
     ax01.set_ylim(0, None)
     ax10.invert_xaxis()
+    ax01.legend()
+    ax10.legend()
 
     cb = ax11.pcolormesh(Z*100, tau2*1e9, np.abs(Omegatz)/2/np.pi*1e-9,
                          shading="auto", vmin=0)

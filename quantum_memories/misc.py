@@ -447,7 +447,7 @@ def build_mesh_fdm(params, verbose=0):
     Z = build_Z_mesh(params)
     D = Z[-1] - Z[0]
     # We calculate NtOmega and Nz such that we have approximately
-    # NtOmega
+    # NtOmega*Nz = N**2
     NtOmega = int(round(N*np.sqrt(c*ntauw*tauw/2/D)))
     Nz = int(round(N*np.sqrt(2*D/c/ntauw/tauw)))
 
