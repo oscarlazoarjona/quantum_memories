@@ -205,6 +205,12 @@ def sinc(x):
     return normalized_sinc(x/np.pi)
 
 
+def sech(t, fwhm):
+    r"""Return a hyperbolic secant mode."""
+    a = fwhm/2/np.log(1+np.sqrt(2))
+    return 1/np.cosh(t/a)/np.sqrt(2*a)
+
+
 def heaviside_theta(x, a=None):
     u"""The Heaviside Pi function.
 
