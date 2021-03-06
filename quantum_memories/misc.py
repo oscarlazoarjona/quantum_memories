@@ -142,7 +142,7 @@ def hermite_gauss(n, x, sigma, power_fwhm=False):
 def harmonic(n, x, L):
     r"""Generate a normalized harmonic mode."""
     if isinstance(x, Basic):
-        omega = pi
+        omega = pi/L
         h = sin(n*omega*(x + L/2))/sqrt(L/2)
     else:
         omega = np.pi/L
