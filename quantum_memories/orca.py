@@ -679,6 +679,44 @@ def calculate_xi0(params):
     return xi0
 
 
+def calculate_xi0p(params):
+    r"""Return xi0p, the imaginary counterpart to xi0."""
+    if not params["USE_SQUARE_CTRL"] or str(params["nwsquare"]) != "oo":
+        mes = 'USE_SQUARE_CTRL must be True, and "nwsquare" must be "oo".'
+        raise ValueError(mes)
+    delta1 = params["delta1"]
+    kappa = calculate_kappa(params)
+    Omega = calculate_Omega(params)
+
+    return kappa*np.abs(Omega)*np.sqrt(2/c)/np.pi/delta1
+
+
+def calculate_phi0(params):
+    r"""Return phi0."""
+    if not params["USE_SQUARE_CTRL"] or str(params["nwsquare"]) != "oo":
+        mes = 'USE_SQUARE_CTRL must be True, and "nwsquare" must be "oo".'
+        raise ValueError(mes)
+    delta1 = params["delta1"]
+    delta2 = params["delta2"]
+    tauw = params["tauw"]
+    kappa = calculate_kappa(params)
+    Omega = calculate_Omega(params)
+
+    phi0 = c*kappa**2 - 2*delta1**2 - 2*delta1*delta2 + 2*np.abs(Omega)**2
+    phi0 = tauw*(phi0)/(2*delta1)
+    return phi0
+
+
+def calculate_z0(params):
+    r"""Return phi0."""
+    if not params["USE_SQUARE_CTRL"] or str(params["nwsquare"]) != "oo":
+        mes = 'USE_SQUARE_CTRL must be True, and "nwsquare" must be "oo".'
+        raise ValueError(mes)
+
+    tauw = params["tauw"]
+    return tauw*c/2
+
+
 def calculate_kappa(params):
     r"""Calculate the kappa parameter."""
     # We calculate the number density assuming Cs 133
