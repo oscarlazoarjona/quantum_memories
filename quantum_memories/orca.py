@@ -817,15 +817,8 @@ def calculate_F(params, xi=None):
         Z = build_Z_mesh(params)
         xi = ffftfreq(Z)
 
-    tauw = params["tauw"]
-    delta1 = params["delta1"]
-    delta2 = params["delta2"]
-    kappa = calculate_kappa(params)
-    Omega = calculate_Omega(params)
-
-    z0 = tauw*c/2
-    phi0 = c*kappa**2 - 2*delta1**2 - 2*delta1*delta2 + 2*np.abs(Omega)**2
-    phi0 = tauw*(phi0)/(2*delta1)
+    z0 = calculate_z0(params)
+    phi0 = calculate_phi0(params)
 
     Ctilde = calculate_Ctilde(params)
     beta = calculate_beta(params, xi)
@@ -1581,7 +1574,7 @@ def solve(params, S0t=None, S0z=None, B0z=None, P0z=None, Omegat="square",
         # Omega = calculate_Omega(params)
         taus = params["taus"]
         t0s = params["t0s"]
-        D = Z[-1] - Z[0]
+        L = Z[-1] - Z[0]
 
         Nt1 = tau1.shape[0]
         Nt2 = tau2.shape[0]
@@ -1641,7 +1634,7 @@ def solve(params, S0t=None, S0z=None, B0z=None, P0z=None, Omegat="square",
                 raise NotImplementedError
             elif seed == "B":
                 # We seed with a harmonic mode.
-                B02z = harmonic(nshg, Z, D)
+                B02z = harmonic(nshg, Z, L)
                 S02z = np.zeros(Nz, complex)
                 S02t = np.zeros(Nt2, complex)
             elif seed == "S":
@@ -1653,8 +1646,8 @@ def solve(params, S0t=None, S0z=None, B0z=None, P0z=None, Omegat="square",
                 # We calculate the gaussian standard deviation.
                 B02z = np.zeros(Nz, complex)
                 S02z = hermite_gauss(nshg, tau2[0] - t0s - 2*Z/c, sigs)
-                S02z = S02z*np.exp(-(Z+D/2)*kappa**2/Gamma21)
-                S02t = hermite_gauss(nshg, tau2 - t0s + D/c, sigs)
+                S02z = S02z*np.exp(-(Z+L/2)*kappa**2/Gamma21)
+                S02t = hermite_gauss(nshg, tau2 - t0s + L/c, sigs)
             else:
                 raise ValueError
         else:
@@ -1691,7 +1684,7 @@ def solve(params, S0t=None, S0z=None, B0z=None, P0z=None, Omegat="square",
         B03z = B[Nt1+Nt2-2, :]
         S03z = S[Nt1+Nt2-2, :]
         if seed == "S":
-            S03t = hermite_gauss(nshg, tau3 - t0s + D/c, sigs)
+            S03t = hermite_gauss(nshg, tau3 - t0s + L/c, sigs)
         elif S0t is not None:
             S03t = S0t[Nt1+Nt2-2:]
         else:
@@ -1714,7 +1707,7 @@ def solve(params, S0t=None, S0z=None, B0z=None, P0z=None, Omegat="square",
 
                 # The region determined by S03z
 
-                S03z_reg = np.where(ttau3 <= t03 + (2*ZZ3+D)/c, 1.0, 0.0)
+                S03z_reg = np.where(ttau3 <= t03 + (2*ZZ3+L)/c, 1.0, 0.0)
                 # The region determined by S03t
                 S03t_reg = 1 - S03z_reg
 
@@ -1725,16 +1718,16 @@ def solve(params, S0t=None, S0z=None, B0z=None, P0z=None, Omegat="square",
                 S03z_reg = S03z_reg*S03z_f(ZZ3 - (ttau3-t03)*c/2)
                 S03z_reg = S03z_reg*np.exp(-c*kappa**2/2/Gamma21*(ttau3-t03))
 
-                S03t_reg = S03t_reg*S03t_f(ttau3 - (2*ZZ3+D)/c)
-                S03t_reg = S03t_reg*np.exp(-kappa**2/Gamma21*(ZZ3+D/2))
+                S03t_reg = S03t_reg*S03t_f(ttau3 - (2*ZZ3+L)/c)
+                S03t_reg = S03t_reg*np.exp(-kappa**2/Gamma21*(ZZ3+L/2))
 
                 S[Nt1+Nt2-2:] = S03z_reg + S03t_reg
             elif analytic_storage == 2:
-                aux1 = S03z_f(D/2 - (tau3-t03)*c/2)
+                aux1 = S03z_f(L/2 - (tau3-t03)*c/2)
                 aux1 = aux1*np.exp(-c*kappa**2/2/Gamma21*(tau3-t03))
 
-                aux2 = S03t_f(tau3 - (2*D/2+D)/c)
-                aux2 = aux2*np.exp(-kappa**2/Gamma21*(D/2+D/2))
+                aux2 = S03t_f(tau3 - (2*L/2+L)/c)
+                aux2 = aux2*np.exp(-kappa**2/Gamma21*(L/2+L/2))
 
                 Sf3t = S03z_reg[:, -1]*aux1 + S03t_reg[:, -1]*aux2
                 S[Nt1+Nt2-2:, -1] = Sf3t
@@ -1743,8 +1736,8 @@ def solve(params, S0t=None, S0z=None, B0z=None, P0z=None, Omegat="square",
                 aux3 = S03z_f(Z - (tff-t03)*c/2)
                 aux3 = aux3*np.exp(-c*kappa**2/2/Gamma21*(tff-t03))
 
-                aux4 = S03t_f(tff - (2*Z+D)/c)
-                aux4 = aux4*np.exp(-kappa**2/Gamma21*(Z+D/2))
+                aux4 = S03t_f(tff - (2*Z+L)/c)
+                aux4 = aux4*np.exp(-kappa**2/Gamma21*(Z+L/2))
 
                 Sf3z = S03z_reg[-1, :]*aux3 + S03t_reg[-1, :]*aux4
                 S[-1, :] = Sf3z
