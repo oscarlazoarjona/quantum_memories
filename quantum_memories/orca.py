@@ -617,6 +617,7 @@ def calculate_Omegatz(params, Omegat, tau2, Z):
     r"""Calculate the Rabi frequency as a function of tau and z."""
     Omega0 = calculate_Omega(params)
     w2 = params["w2"]
+    tauw = params["tauw"]
     with_focusing = params["with_focusing"]
     Nt2 = len(tau2)
     Nz = len(Z)
@@ -630,7 +631,7 @@ def calculate_Omegatz(params, Omegat, tau2, Z):
     if Omegat == "square":
         Omega = Omega0*np.ones((Nt2, Nz))
     else:
-        Omega = np.outer(Omegat(tau2), np.ones(Nz))
+        Omega = Omega0*np.sqrt(tauw)*np.outer(Omegat(tau2), np.ones(Nz))
 
     return Omega*w2/wz
 
@@ -1130,7 +1131,8 @@ def eqs_fdm(params, tau, Z, Omegat="square", case=0, adiabatic=True,
         Gamma21 = calculate_Gamma21(params)
         Gamma32 = calculate_Gamma32(params)
         kappa = calculate_kappa(params)
-        Omega = calculate_Omega(params)
+        Omega0 = calculate_Omega(params)
+        tauw = params["tauw"]
 
         nX = nv*Nt*Nz
         Ntz = Nt*Nz
@@ -1148,16 +1150,18 @@ def eqs_fdm(params, tau, Z, Omegat="square", case=0, adiabatic=True,
     wXi = w0Xi*np.sqrt(1 + (Z/zRXi)**2)
 
     if with_focusing:
-        Omegaz = Omega*w0Xi/wXi
+        Omegaz = Omega0*w0Xi/wXi
     else:
-        Omegaz = Omega*np.ones(Nz)
+        Omegaz = Omega0*np.ones(Nz)
 
     if Omegat == "square":
         Omegatauz = np.outer(np.ones(Nt), Omegaz).flatten()
     elif with_focusing:
-        Omegatauz = np.outer(Omegat(tau), w0Xi/wXi).flatten()
+        Omegatauz = Omega0*np.sqrt(tauw)
+        Omegatauz *= np.outer(Omegat(tau), w0Xi/wXi).flatten()
     else:
-        Omegatauz = np.outer(Omegat(tau), np.ones(Nz)).flatten()
+        Omegatauz = Omega0*np.sqrt(tauw)
+        Omegatauz *= np.outer(Omegat(tau), np.ones(Nz)).flatten()
 
     if sparse:
         eye = sp_eye(Ntz, format=bfmt)
