@@ -156,7 +156,8 @@ def set_parameters_ladder(custom_parameters=None, fitted_couplings=True,
            "nssquare": nssquare, "nwsquare": nwsquare, "nrsquare": nrsquare,
            "ntauw": 1.0, "N": 101,
            "pumping": 0.0,
-           "with_focusing": True}
+           "with_focusing": True,
+           "rep_rate": 80e6}
     # NOTE: if an independent parameter is added here, it must also
     # be added in the next block of code to update it.
 
@@ -312,10 +313,10 @@ def set_parameters_ladder(custom_parameters=None, fitted_couplings=True,
                 nrsquare = custom_parameters["ntauw"]
             if "pumping" in custom_parameters.keys():
                 pms["pumping"] = custom_parameters["pumping"]
-                # pumping = custom_parameters["pumping"]
             if "with_focusing" in custom_parameters.keys():
                 pms["with_focusing"] = custom_parameters["with_focusing"]
-                # with_focusing = custom_parameters["with_focusing"]
+            if "rep_rate" in custom_parameters.keys():
+                pms["rep_rate"] = custom_parameters["rep_rate"]
     #########################################################################
 
     if calculate_atom:
@@ -557,6 +558,7 @@ def print_params(params):
     delta1 = params["delta1"]
     delta2 = params["delta2"]
     energy_pulse2 = params["energy_pulse2"]
+    rep_rate = params["rep_rate"]
     Temperature = params["Temperature"]
     pumping = params["pumping"]
 
@@ -583,6 +585,8 @@ def print_params(params):
 
     print("Control pulse energy : {:10.3f} nJ".format(energy_pulse2*1e9))
     print("Critical pulse energy: {:10.3f} nJ".format(Ecrit*1e9))
+    print("Average control power: {:10.3f} W".format(energy_pulse2*rep_rate))
+    print("Critical average control power: {:10.3f} W".format(Ecrit*rep_rate))
     aux = [t0s*1e9, t0w*1e9, t0r*1e9]
     print("t0s: {:2.3f} ns, t0w: {:2.3f} ns, t0r: {:2.3f} ns".format(*aux))
     print("L: {:2.3f} cm".format(L*100))
