@@ -46,7 +46,7 @@ if True:
               "sigma_power1": sigma_power1,
               "sigma_power2": sigma_power2,
               "Temperature": 273.15 + 115,
-              "L": D,
+              "L": L,
               "w1": 131e-6,
               "w2": 131e-6,
               "delta1": 9.0*1e9*2*np.pi,

@@ -9,7 +9,6 @@ import numpy as np
 from scipy.constants import physical_constants, c, hbar, epsilon_0, mu_0
 from scipy.sparse import spdiags
 from scipy.sparse import eye as sp_eye
-from scipy.sparse import kron as sp_kron
 
 from matplotlib import pyplot as plt
 from sympy import oo
@@ -1208,25 +1207,6 @@ def eqs_fdm(params, tau, Z, Omegat="square", case=0, adiabatic=True,
             A = set_block(A, 1, 1, c*kappa**2/2/Gamma21*eye)
             A = set_block(A, 1, 1, c/2*DZ)
 
-            # if hasattr(Omegat, "__call__"):
-            #     def Wpt(t):
-            #         if sparse:
-            #             aux1 = Omegat(t)
-            #             aux1 = spdiags(aux1, 0, Nt, Nt, format=bfmt)
-            #             aux2 = sp_eye(Nz, format=bfmt)
-            #             Omegatm = sp_kron(aux1, aux2, format=bfmt)
-            #         else:
-            #             Omegatm = np.kron(np.diag(Omegat(t)), np.eye(Nz))
-            #         aux1 = np.abs(Omegatm)**2/Gamma21
-            #         aux2 = kappa*Omegatm/Gamma21
-            #         aux3 = c*kappa*np.conjugate(Omegatm)/2/Gamma21
-            #         A_ = A.copy()
-            #         A_ = set_block(A_, 0, 0, aux1)
-            #         A_ = set_block(A_, 0, 1, aux2)
-            #         A_ = set_block(A_, 1, 0, aux3)
-            #         return A_
-            #
-            # else:
             aux1 = np.abs(Omega)**2/Gamma21
             aux2 = kappa*Omega/Gamma21
             aux3 = c*kappa*np.conjugate(Omega)/2/Gamma21
@@ -1271,28 +1251,9 @@ def eqs_fdm(params, tau, Z, Omegat="square", case=0, adiabatic=True,
             A = set_block(A, 0, 2, 1j*kappa*eye)
             A = set_block(A, 2, 0, 1j*kappa*c/2*eye)
 
-            if hasattr(Omegat, "__call__"):
-                def Wpt(t):
-                    if sparse:
-                        aux1 = Omegat(t)
-                        aux1 = spdiags(aux1, 0, Nt, Nt, format=bfmt)
-                        aux2 = sp_eye(Nz, format=bfmt)
-                        Omegatm = sp_kron(aux1, aux2, format=bfmt)
-                    else:
-                        Omegatm = np.kron(np.diag(Omegat(t)), np.eye(Nz))
-                    aux = np.conjugate(Omegatm)
-                    A_ = A.copy()
-                    A_ = set_block(A_, 0, 1, 1j*aux)
-                    A_ = set_block(A_, 1, 0, 1j*Omegatm)
-                    return A_
-            else:
-                aux = 1j*np.conjugate(Omega)
-                A = set_block(A, 0, 1, aux*eye)
-                A = set_block(A, 1, 0, 1j*Omega*eye)
+            A = set_block(A, 0, 1, 1j*np.conjugate(Omega))
+            A = set_block(A, 1, 0, 1j*Omega)
 
-    # if hasattr(Omegat, "__call__"):
-    #     return Wpt
-    # else:
     if plots:
         ################################################################
         # Plotting Wp.
@@ -1303,81 +1264,6 @@ def eqs_fdm(params, tau, Z, Omegat="square", case=0, adiabatic=True,
         plt.close("all")
 
     return A
-
-
-# def solve_fdm_subblock(params, Wp, S0t, S0z, B0z, tau, Z,
-#                        P0z=None, return_block=False, folder="",
-#                        plots=False):
-#     r"""We solve using the finite difference method on a block for given
-#     boundary conditions, and with time and space precisions `pt` and `pz`.
-#     """
-#     if P0z is not None:
-#         nv = 3
-#     else:
-#         nv = 2
-#     # We unpack parameters.
-#     if True:
-#         Nt = params["Nt"]
-#         Nz = params["Nz"]
-#         nX = nv*Nt*Nz
-#     # We transform the system.
-#     if True:
-#         W, b, Xb_ = impose_boundary(Wp, tau, S0t, S0z, B0z)
-#         Ws = csr_matrix(W)
-#         bs = csr_matrix(np.reshape(b, (nX, 1)))
-#     # We solve the transformed system.
-#     if True:
-#         Xsol = linalg.spsolve(Ws, bs)
-#         Xsol_ = np.reshape(Xsol, (nv, Nt, Nz))
-#     if plots:
-#         ################################################################
-#         # Plotting W and B.
-#         plt.figure(figsize=(15, 7))
-#         plt.subplot(1, 2, 1)
-#         plt.title("$W$")
-#         plt.imshow(np.log(np.abs(W)))
-#
-#         plt.subplot(1, 2, 2)
-#         plt.title("$B$")
-#         plt.plot(np.abs(b))
-#         plt.savefig(folder+"W-b.png", bbox_inches="tight")
-#         plt.close("all")
-#
-#         ################################################################
-#         # Plotting B and S.
-#         plt.figure(figsize=(19, 9))
-#
-#         plt.subplot(4, 1, 1)
-#         plt.title("$B$ boundary")
-#         plt.imshow(np.abs(Xb_[0, :, :]))
-#
-#         plt.subplot(4, 1, 2)
-#         plt.title("$B$ solution")
-#         plt.imshow(np.abs(Xsol_[0, :, :]))
-#
-#         plt.subplot(4, 1, 3)
-#         plt.title("$S$ boundary")
-#         plt.imshow(np.abs(Xb_[1, :, :]))
-#
-#         plt.subplot(4, 1, 4)
-#         plt.title("$S$ solution")
-#         plt.imshow(np.abs(Xsol_[1, :, :]))
-#         plt.savefig(folder+"BS.png", bbox_inches="tight")
-#         plt.close("all")
-#     # We unpack the solution and return it.
-#     if return_block:
-#         Bsol = Xsol_[0]
-#         Ssol = Xsol_[1]
-#     else:
-#         if P0z is not None:
-#             Psol = Xsol_[0, -1, :]
-#             Bsol = Xsol_[1, -1, :]
-#             Ssol = Xsol_[2, -1, :]
-#             return Psol, Bsol, Ssol
-#         else:
-#             Bsol = Xsol_[0, -1, :]
-#             Ssol = Xsol_[1, -1, :]
-#             return Bsol, Ssol
 
 
 def solve_fdm_block(params, S0t, S0z, B0z, tau, Z, P0z=None, Omegat="square",
@@ -1995,3 +1881,78 @@ def check_fdm(params, B, S, tau, Z, P=None,
     if plots:
         plot_solution(tau, Z, Brerr, Srerr, folder, "rerr"+name, log=True)
         plot_solution(tau, Z, Bgerr, Sgerr, folder, "gerr"+name, log=True)
+
+
+# def solve_fdm_subblock(params, Wp, S0t, S0z, B0z, tau, Z,
+#                        P0z=None, return_block=False, folder="",
+#                        plots=False):
+#     r"""We solve using the finite difference method on a block for given
+#     boundary conditions, and with time and space precisions `pt` and `pz`.
+#     """
+#     if P0z is not None:
+#         nv = 3
+#     else:
+#         nv = 2
+#     # We unpack parameters.
+#     if True:
+#         Nt = params["Nt"]
+#         Nz = params["Nz"]
+#         nX = nv*Nt*Nz
+#     # We transform the system.
+#     if True:
+#         W, b, Xb_ = impose_boundary(Wp, tau, S0t, S0z, B0z)
+#         Ws = csr_matrix(W)
+#         bs = csr_matrix(np.reshape(b, (nX, 1)))
+#     # We solve the transformed system.
+#     if True:
+#         Xsol = linalg.spsolve(Ws, bs)
+#         Xsol_ = np.reshape(Xsol, (nv, Nt, Nz))
+#     if plots:
+#         ################################################################
+#         # Plotting W and B.
+#         plt.figure(figsize=(15, 7))
+#         plt.subplot(1, 2, 1)
+#         plt.title("$W$")
+#         plt.imshow(np.log(np.abs(W)))
+#
+#         plt.subplot(1, 2, 2)
+#         plt.title("$B$")
+#         plt.plot(np.abs(b))
+#         plt.savefig(folder+"W-b.png", bbox_inches="tight")
+#         plt.close("all")
+#
+#         ################################################################
+#         # Plotting B and S.
+#         plt.figure(figsize=(19, 9))
+#
+#         plt.subplot(4, 1, 1)
+#         plt.title("$B$ boundary")
+#         plt.imshow(np.abs(Xb_[0, :, :]))
+#
+#         plt.subplot(4, 1, 2)
+#         plt.title("$B$ solution")
+#         plt.imshow(np.abs(Xsol_[0, :, :]))
+#
+#         plt.subplot(4, 1, 3)
+#         plt.title("$S$ boundary")
+#         plt.imshow(np.abs(Xb_[1, :, :]))
+#
+#         plt.subplot(4, 1, 4)
+#         plt.title("$S$ solution")
+#         plt.imshow(np.abs(Xsol_[1, :, :]))
+#         plt.savefig(folder+"BS.png", bbox_inches="tight")
+#         plt.close("all")
+#     # We unpack the solution and return it.
+#     if return_block:
+#         Bsol = Xsol_[0]
+#         Ssol = Xsol_[1]
+#     else:
+#         if P0z is not None:
+#             Psol = Xsol_[0, -1, :]
+#             Bsol = Xsol_[1, -1, :]
+#             Ssol = Xsol_[2, -1, :]
+#             return Psol, Bsol, Ssol
+#         else:
+#             Bsol = Xsol_[0, -1, :]
+#             Ssol = Xsol_[1, -1, :]
+#             return Bsol, Ssol
