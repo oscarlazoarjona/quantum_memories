@@ -360,30 +360,11 @@ def set_parameters_ladder(custom_parameters=None, fitted_couplings=True,
         # We calculate the matrices for the given states.
         omega, gamma, r = calculate_matrices(magnetic_states, 1.0)
 
-        # We plot these matrices.
-        # path = ''; name = element+str(isotope)
-        # fig = pyplot.figure(); ax = fig.add_subplot(111)
-        # fancy_matrix_plot(ax, omega, magnetic_states, path,
-        #                   name+'_omega.png',
-        #                   take_abs=True, colorbar=True)
-        # fig = pyplot.figure(); ax = fig.add_subplot(111)
-        # fancy_matrix_plot(ax, gamma, magnetic_states, path,
-        #                   name+'_gamma.png',
-        #                   take_abs=True, colorbar=True)
-        # fig = pyplot.figure(); ax = fig.add_subplot(111)
-        # fancy_r_plot(r, magnetic_states, path, name+'_r.png',
-        #              complex_matrix=True)
-        # pyplot.close("all")
-
         # We get the parameters for the simplified scheme.
         # The couplings.
         r1 = r[2][e_index][g_index]
         r2 = r[2][l_index][e_index]
 
-        # The FAST function calculate_matrices always returns r in
-        # Bohr radii, so we convert. By contrast, it returns omega
-        # and gamma in units scaled by Omega. If Omega=1e6 this means
-        # 10^6 rad/s. So we do not have to rescale omega or gamma.
         r1 = r1*a0
         r2 = r2*a0
 
@@ -419,10 +400,6 @@ def set_parameters_ladder(custom_parameters=None, fitted_couplings=True,
 
         omega21 = Transition(e, g).omega
         omega32 = Transition(l, e).omega
-        # print omega21, omega32
-        # print r1, r2
-        # print n_atomic0
-        # print atom.mass
     else:
         if (element, isotope) == ("Rb", 85):
 
@@ -551,7 +528,7 @@ def print_params(params):
     sigma_power2 = params["sigma_power2"]
     taus = params["taus"]
     tauw = params["tauw"]
-    Omega = calculate_Xi(params)
+    Xi = calculate_Xi(params)
     w1 = params["w1"]
     w2 = params["w2"]
     delta1 = params["delta1"]
@@ -571,7 +548,7 @@ def print_params(params):
     print("Atom: {}{}".format(params["element"], params["isotope"]))
     print("delta1: %2.3f GHz" % (delta1/2/np.pi*1e-9))
     print("delta2: %2.3f GHz" % (delta2/2/np.pi*1e-9))
-    print("Rabi frequency: %2.3f GHz" % (Omega/2/np.pi*1e-9))
+    print("Rabi frequency: %2.3f GHz" % (Xi/2/np.pi*1e-9))
 
     aux = (sigma_power1*1e-9, sigma_power2*1e-9)
     print("Signal & Control bandwidth: %2.3f GHz, %2.3f GHz" % aux)
@@ -668,7 +645,7 @@ def calculate_power(params, Xi):
     elif dim == 1:
         Z = build_Z_mesh(params)
         if Xi.shape == Z.shape:
-            # We assume that Omega is given as a function of z.
+            # We assume that Xi is given as a function of z.
             zRS, zRXi = rayleigh_range(params)
             wz = w2*np.sqrt(1 + (Z/zRXi)**2)
         else:
@@ -1175,7 +1152,7 @@ def calculate_efficiencies(tau, Z, Bw, Sw, Br, Sr, verbose=0):
 # Finite difference ORCA routines.
 
 
-def eqs_fdm(params, tau, Z, Omegat="square", case=0, adiabatic=True,
+def eqs_fdm(params, tau, Z, Xit="square", case=0, adiabatic=True,
             pt=4, pz=4, plots=False, folder="", sparse=False):
     r"""Calculate the matrix form of equations `Wp X = 0`."""
     if not adiabatic:
@@ -1190,7 +1167,7 @@ def eqs_fdm(params, tau, Z, Omegat="square", case=0, adiabatic=True,
         Gamma21 = calculate_Gamma21(params)
         Gamma32 = calculate_Gamma32(params)
         kappa = calculate_kappa(params)
-        Omega0 = calculate_Xi(params)
+        Xi0 = calculate_Xi(params)
 
         g21 = calculate_g21(params)
         g32Delta = calculate_g32Delta(params)
@@ -1209,33 +1186,33 @@ def eqs_fdm(params, tau, Z, Omegat="square", case=0, adiabatic=True,
                   "sparse": sparse}
         DT, DZ = fdm_derivative_operators(*args, **kwargs)
 
-    # We calculate Omega(tau, z) as an array, and then as a flattened,
+    # We calculate Xi(tau, z) as an array, and then as a flattened,
     # diagonal matrix.
     w0Xi = params["w2"]
     zRS, zRXi = rayleigh_range(params)
     wXi = w0Xi*np.sqrt(1 + (Z/zRXi)**2)
 
     if with_focusing:
-        Omegaz = Omega0*w0Xi/wXi
+        Xiz = Xi0*w0Xi/wXi
         OmegaBSz = OmegaBS0*w0Xi/wXi
     else:
-        Omegaz = Omega0*np.ones(Nz)
+        Xiz = Xi0*np.ones(Nz)
         OmegaBSz = OmegaBS0*np.ones(Nz)
 
-    if Omegat == "square":
-        Omegatauz = np.outer(np.ones(Nt), Omegaz).flatten()
+    if Xit == "square":
+        Xitauz = np.outer(np.ones(Nt), Xiz).flatten()
         OmegaBStauz = np.outer(np.ones(Nt), OmegaBSz).flatten()
     elif with_focusing:
-        Omegatauz = Omega0*np.sqrt(tauw)
-        Omegatauz *= np.outer(Omegat(tau), w0Xi/wXi).flatten()
+        Xitauz = Xi0*np.sqrt(tauw)
+        Xitauz *= np.outer(Xit(tau), w0Xi/wXi).flatten()
 
         raise NotImplementedError
         # It should be something like this:
         # OmegaBStauz = OmegaBS0*np.sqrt(tauw)
         # OmegaBStauz *= np.outer(OmegaBSt(tau), w0Xi/wXi).flatten()
     else:
-        Omegatauz = Omega0*np.sqrt(tauw)
-        Omegatauz *= np.outer(Omegat(tau), np.ones(Nz)).flatten()
+        Xitauz = Xi0*np.sqrt(tauw)
+        Xitauz *= np.outer(Xit(tau), np.ones(Nz)).flatten()
 
         raise NotImplementedError
         # It should be something like this:
@@ -1245,13 +1222,13 @@ def eqs_fdm(params, tau, Z, Omegat="square", case=0, adiabatic=True,
     if sparse:
         eye = sp_eye(Ntz, format=bfmt)
         A = bfmtf((nX, nX), dtype=np.complex128)
-        Omega = spdiags(Omegatauz, [0], Ntz, Ntz, format=bfmt)
+        Xi = spdiags(Xitauz, [0], Ntz, Ntz, format=bfmt)
 
         OmegaBS = spdiags(OmegaBStauz, [0], Ntz, Ntz, format=bfmt)
     else:
         eye = np.eye(Ntz)
         A = np.zeros((nX, nX), complex)
-        Omega = np.diag(Omegatauz)
+        Xi = np.diag(Xitauz)
 
         OmegaBS = np.diag(OmegaBStauz)
 
@@ -1291,19 +1268,6 @@ def eqs_fdm(params, tau, Z, Omegat="square", case=0, adiabatic=True,
             A = set_block(A, 1, 0, 1j*g21*np.conjugate(OmegaBS)/2*eye)
             A = set_block(A, 0, 1, 1j*g21*OmegaBS/2*eye)
 
-            # # We set the right-hand side terms.
-            # A = set_block(A, 0, 0, Gamma32*eye)
-            # A = set_block(A, 1, 1, c*kappa**2/2/Gamma21*eye)
-            # A = set_block(A, 1, 1, c/2*DZ)
-            #
-            # aux1 = np.abs(Omega)**2/Gamma21
-            # aux2 = kappa*Omega/Gamma21
-            # aux3 = c*kappa*np.conjugate(Omega)/2/Gamma21
-            #
-            # A = set_block(A, 0, 0, aux1)
-            # A = set_block(A, 0, 1, aux2)
-            # A = set_block(A, 1, 0, aux3)
-
         elif case == 0 and not adiabatic:
             # We set the time derivatives.
             A = set_block(A, 0, 0, DT)
@@ -1340,8 +1304,8 @@ def eqs_fdm(params, tau, Z, Omegat="square", case=0, adiabatic=True,
             A = set_block(A, 0, 2, 1j*kappa*eye)
             A = set_block(A, 2, 0, 1j*kappa*c/2*eye)
 
-            A = set_block(A, 0, 1, 1j*np.conjugate(Omega))
-            A = set_block(A, 1, 0, 1j*Omega)
+            A = set_block(A, 0, 1, 1j*np.conjugate(Xi))
+            A = set_block(A, 1, 0, 1j*Xi)
 
     if plots:
         ################################################################
@@ -1355,7 +1319,7 @@ def eqs_fdm(params, tau, Z, Omegat="square", case=0, adiabatic=True,
     return A
 
 
-def solve_fdm_block(params, S0t, S0z, B0z, tau, Z, P0z=None, Omegat="square",
+def solve_fdm_block(params, S0t, S0z, B0z, tau, Z, P0z=None, Xit="square",
                     case=0, method=0, pt=4, pz=4,
                     plots=False, folder="", name="", verbose=0):
     r"""We solve using the finite difference method for given
@@ -1377,8 +1341,8 @@ def solve_fdm_block(params, S0t, S0z, B0z, tau, Z, P0z=None, Omegat="square",
 
     -  ``P0z`` - array, the P(Z, t=0) boundary condition (default None).
 
-    -  ``Omegat`` - function, a function that returns the temporal mode of the
-                    Rabi frequency at time tau (default "square").
+    -  ``Xit`` - function, a function that returns the temporal mode of the
+                 Rabi frequency at time tau (default "square").
 
     -  ``case`` - int, the dynamics to solve for: 0 for free space, 1 for
                   propagation through vapour, 2 for propagation through vapour
@@ -1426,10 +1390,9 @@ def solve_fdm_block(params, S0t, S0z, B0z, tau, Z, P0z=None, Omegat="square",
         # We solve the full block.
         sparse = True
         aux1 = [params, tau, Z]
-        aux2 = {"Omegat": Omegat, "pt": pt, "pz": pz, "case": case,
+        aux2 = {"Xit": Xit, "pt": pt, "pz": pz, "case": case,
                 "folder": folder, "plots": False, "sparse": sparse,
                 "adiabatic": P0z is None}
-        # print(Omegat)
         t00 = time()
         A = eqs_fdm(*aux1, **aux2)
         if verbose > 0: print("FDM Eqs time  : {:.3f} s".format(time()-t00))
@@ -1492,7 +1455,7 @@ def solve_fdm_block(params, S0t, S0z, B0z, tau, Z, P0z=None, Omegat="square",
         return B, S
 
 
-def solve(params, S0t=None, S0z=None, B0z=None, P0z=None, Omegat="square",
+def solve(params, S0t=None, S0z=None, B0z=None, P0z=None, Xit="square",
           method=0, pt=4, pz=4,
           folder="", name="", plots=False, verbose=0,
           seed=None, analytic_storage=True, return_modes=False):
@@ -1513,7 +1476,6 @@ def solve(params, S0t=None, S0z=None, B0z=None, P0z=None, Omegat="square",
 
         delta_disp = calculate_delta_disp(params)
         g21 = calculate_g21(params)
-        # Omega = calculate_Omega(params)
         taus = params["taus"]
         t0s = params["t0s"]
         L = Z[-1] - Z[0]
@@ -1612,7 +1574,7 @@ def solve(params, S0t=None, S0z=None, B0z=None, P0z=None, Omegat="square",
         params_memory["Nt"] = Nt2
 
         aux1 = [params_memory, S02t, S02z, B02z, tau2, Z]
-        aux2 = {"Omegat": Omegat, "method": method, "pt": pt, "pz": pz,
+        aux2 = {"Xit": Xit, "method": method, "pt": pt, "pz": pz,
                 "folder": folder, "plots": False,
                 "verbose": verbose-1, "P0z": P0z, "case": 2}
         if adiabatic:
@@ -1761,10 +1723,7 @@ def check_block_fdm(params, B, S, tau, Z, case=0, P=None,
     # We build the derivative operators.
     Nt = tau.shape[0]
     Nz = Z.shape[0]
-    Gamma32 = calculate_Gamma32(params)
-    Gamma21 = calculate_Gamma21(params)
-    # Xi = calculate_Xi(params)
-    kappa = calculate_kappa(params)
+
     Dt = derivative_operator(tau, p=pt)
     Dz = derivative_operator(Z, p=pt)
 
