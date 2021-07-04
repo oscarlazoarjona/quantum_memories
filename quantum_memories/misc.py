@@ -84,7 +84,7 @@ def interpolator(xp, fp, kind="linear"):
 
 def ffftfreq(t):
     r"""Calculate the angular frequency axis for a given time axis."""
-    dt = (t[-1]-t[0])/len(t)
+    dt = t[1]-t[0]
     nu = np.fft.fftshift(np.fft.fftfreq(t.size, dt))
     return nu
 
@@ -530,9 +530,6 @@ def build_mesh_fdm(params, verbose=0):
         print(mes.format(*aux))
         mes = "T1/T1_tar, T3/T1_tar: {:.3f}, {:.3f}"
         print(mes.format(T1/T1_tar, T3/T1_tar))
-
-        # aux = [dt1*1e9, dt2*1e9, dt3*1e9]
-        # print("dt1, dt2, dt3 : {} {} {}".format(*aux))
 
         if total_size > 1.3e6:
             mes = "The mesh size is larger than 1.3 million, the computer"

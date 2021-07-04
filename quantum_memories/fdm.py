@@ -744,7 +744,6 @@ def solve_fdm(A, input_indices, output_indices, input=None,
         t3 = time()-t0
         print(1111, t3, t1+t2+t3)
 
-    # print(22, np.allclose(G, G_new))
     if full_propagator:
         raise NotImplementedError
 

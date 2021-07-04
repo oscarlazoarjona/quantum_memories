@@ -10,17 +10,16 @@ from __future__ import print_function
 from pickle import dump
 import numpy as np
 from matplotlib import pyplot as plt
-from quantum_memories import (time_bandwith_product, build_mesh_fdm,
-                              sketch_frame_transform)
+from quantum_memories.misc import (time_bandwith_product)
+from quantum_memories.graphical import sketch_frame_transform
 from quantum_memories.orca import (set_parameters_ladder,
                                    calculate_pulse_energy, print_params,
+                                   build_mesh_fdm,
                                    calculate_xi0, calculate_F,
                                    calculate_optimal_input_xi, num_integral,
                                    calculate_optimal_input_Z,
                                    calculate_optimal_input_tau,
-                                   calculate_efficiencies,
                                    solve)
-from quantum_memories.graphical import plot_inout
 from scipy.constants import c
 
 # We establish base parameters.
@@ -37,7 +36,7 @@ if True:
     # The cell to control pulse ratio at half light-speed.
     lp = 2*l
     tauw = 300e-12
-    L = lp*tauw*c/2
+    D = lp*tauw*c/2
     ########################################################################
     # The bandwidth of the control pulse is chosen so that it is a
     # Fourier-limited square pulse with intensity FWHM in time tauw.
@@ -53,7 +52,7 @@ if True:
               "sigma_power1": sigma_power1,
               "sigma_power2": sigma_power2,
               "Temperature": 273.15 + 115,
-              "L": L,
+              "L": D/1.05,
               "w1": 131e-6,
               "w2": 131e-6,
               "delta1": 9.0*1e9*2*np.pi,
@@ -73,6 +72,7 @@ if True:
     print("")
     params, Z, tau, tau1, tau2, tau3 = build_mesh_fdm(params)
     sketch_frame_transform(params, folder=folder, draw_readout=False)
+
 # Calculate the optimal signal.
 if True:
     ########################################################################
@@ -103,9 +103,15 @@ if True:
 # # We calculate the write-in process.
 if calculate:
     # NOTE: set analytic_storage to 2 for faster calculation.
+    # kwargs = {"plots": True, "folder": folder, "name": "write", "verbose": 0,
+    #           "analytic_storage": 1, "S0t": S0tau}
+    # tau, Z, Bw, Sw = solve_fdm(params, **kwargs)
+
+    # NOTE: set analytic_storage to 2 for faster calculation.
     kwargs = {"plots": True, "folder": folder, "name": "write", "verbose": 0,
               "analytic_storage": 1, "S0t": S0tau}
     tau, Z, Bw, Sw = solve(params, **kwargs)
+
 # We calculate the read-out process.
 if calculate:
     B0_stored = Bw[-1, :]
@@ -115,25 +121,55 @@ if calculate:
     tau, Z, Br, Sr = solve(params, **kwargs)
 # We calculate the Beam-splitter picture transmissivities and reflectivities.
 if calculate:
-    aux = calculate_efficiencies(tau, Z, Bw, Sw, Br, Sr, verbose=1)
-    eta_num, TB, RS, RB, TS = aux
+    NS = num_integral(np.abs(Sw[:, 0])**2, tau)
+    NST = num_integral(np.abs(Sw[:, -1])**2, tau)
 
-    assert np.round(eta_ana, 4) == 0.7953
-    assert np.round(eta_num, 4) == 0.7901
+    Nt1 = tau1.shape[0]
+    S0Z_num = Sw[Nt1-1, :]
 
-    assert np.round(TB, 4) == 0.0998
-    assert np.round(RS, 4) == 0.8888
-    assert np.round(RB, 4) == 0.9002
-    assert np.round(TS, 4) == 0.1112
+    TS = NST/NS
+    RS = 1 - TS
+
+    NB = num_integral(np.abs(Br[0, :])**2, tau)
+    NBT = num_integral(np.abs(Br[-1, :])**2, tau)
+    TB = NBT/NB
+    RB = 1 - TB
+
+    Nf = num_integral(np.abs(Sr[:, -1])**2, tau)
+    eta_num = Nf/NS
+
+    print("Numerical efficiency      : {:.4f}".format(eta_num))
+    print("")
+    print("Beam-splitter picture transmissivities and reflectivities:")
+    print("TB: {:.4f}, RS: {:.4f}".format(TB, RS))
+    print("RB: {:.4f}, TS: {:.4f}".format(RB, TS))
 # Save the results.
 if calculate:
+    dump(params, open(folder+"params.pickle", "wb"))
     dump([tau, Z, Bw, Sw], open(folder+"solution_write.pickle", "wb"))
     dump([tau, Z, Br, Sr], open(folder+"solution_read.pickle", "wb"))
 if calculate and plots:
     fs = 15
     ######################################################################
-    plot_inout(tau, Z, Bw, Sw, Br, Sr, folder, "high_efficiency")
+    fig, ax1 = plt.subplots()
+    ax2 = ax1.twinx()
+    ax1.plot(tau*1e9, np.abs(Sw[:, 0])**2*1e-9, "b-", label="Input")
+    ax1.plot(tau*1e9, np.abs(Sw[:, -1])**2*1e-9, "r-", label="Leaked")
+    ax1.plot(tau*1e9, np.abs(Sr[:, -1])**2*1e-9, "g-", label="Output")
 
+    angle1 = np.unwrap(np.angle(Sw[:, 0]))/2/np.pi
+    angle2 = np.unwrap(np.angle(Sw[:, -1]))/2/np.pi
+    angle3 = np.unwrap(np.angle(Sr[:, -1]))/2/np.pi
+    ax2.plot(tau*1e9, angle1, "b:")
+    ax2.plot(tau*1e9, angle2, "r:")
+    ax2.plot(tau*1e9, angle3, "g:")
+
+    ax1.set_xlabel(r"$\tau \ [ns]$", fontsize=fs)
+    ax1.set_ylabel(r"$|S|^2$  [1/ns]", fontsize=fs)
+    ax2.set_ylabel(r"Phase  [revolutions]", fontsize=fs)
+    ax1.legend(loc=6)
+    plt.savefig(folder+"high_efficiency.png", bbox_inches="tight")
+    plt.close()
     ######################################################################
 
     fig, ax = plt.subplots(1, 1, figsize=(15, 8))

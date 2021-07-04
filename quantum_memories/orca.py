@@ -155,7 +155,7 @@ def set_parameters_ladder(custom_parameters=None, fitted_couplings=True,
            "nssquare": nssquare, "nwsquare": nwsquare, "nrsquare": nrsquare,
            "ntauw": 1.0, "N": 101,
            "pumping": 0.0,
-           "with_focusing": True,
+           "with_focusing": False,
            "rep_rate": 80e6}
     # NOTE: if an independent parameter is added here, it must also
     # be added in the next block of code to update it.
@@ -596,7 +596,7 @@ def print_params(params):
 
 
 def calculate_Omega(params):
-    r"""Calculate the effective Rabi frequency."""
+    r"""Calculate the effective (time averaged) Rabi frequency."""
     energy_pulse2 = params["energy_pulse2"]
     hbar = params["hbar"]
     e_charge = params["e_charge"]
@@ -886,7 +886,6 @@ def calculate_optimal_input_xi(params, xi=None, force_xi0=False,
     Zoff = params_["tauw"]/2*(c/2)
     Sin = hermite_gauss(0, xi-xi0, sigma_xi)
     Sin = Sin*np.exp(2*np.pi*1j*Zoff*xi)
-
     # We normalize so that the integral of the signal mod square over tau
     # is 1.
     Sin = Sin*np.sqrt(c/2)
@@ -976,8 +975,8 @@ def calculate_optimal_input_tau(params, tau=None, with_critical_energy=True):
 
     L = params["L"]
     tau0 = params["t0w"] - params["tauw"]/2
-
     S0tau = S0Z_interp(-L/2 - c*(tau-tau0)/2)
+
     S0tau = S0tau*np.exp(-c*kappa**2*(tau-tau0)/(2*Gamma21))
     S0tau = S0tau/np.sqrt(num_integral(np.abs(S0tau)**2, tau))
 
@@ -1119,6 +1118,7 @@ def calculate_efficiencies(tau, Z, Bw, Sw, Br, Sr, verbose=0):
 #############################################################################
 # Finite difference ORCA routines.
 
+
 def eqs_fdm(params, tau, Z, Omegat="square", case=0, adiabatic=True,
             pt=4, pz=4, plots=False, folder="", sparse=False):
     r"""Calculate the matrix form of equations `Wp X = 0`."""
@@ -1135,6 +1135,7 @@ def eqs_fdm(params, tau, Z, Omegat="square", case=0, adiabatic=True,
         Gamma32 = calculate_Gamma32(params)
         kappa = calculate_kappa(params)
         Omega0 = calculate_Omega(params)
+
         tauw = params["tauw"]
 
         nX = nv*Nt*Nz
@@ -1371,71 +1372,6 @@ def solve_fdm_block(params, S0t, S0z, B0z, tau, Z, P0z=None, Omegat="square",
         if verbose > 0: print("FDM Sol time  : {:.3f} s".format(time()-t00))
         #############
 
-        # t00 = time()
-        # args = [A, tau, S0t, S0z, B0z]
-        # W, b, Xb_ = impose_boundary(*args, sparse=sparse)
-        # if verbose > 0: print("FDM Bdr time  : {:.3f} s".format(time()-t00))
-        #
-        # t00 = time()
-        # if sparse:
-        #     X = linalg.spsolve(W, b)
-        #     mes = "FDM Sol time  : {:.3f} s"
-        #     if verbose > 0: print(mes.format(time()-t00))
-        # else:
-        #     X = np.linalg.solve(W, b)
-        #     mes = "FDM Sol time  : {:.3f} s"
-        #     if verbose > 0: print(mes.format(time()-t00))
-        # B, S = np.reshape(X, (nv, Nt, Nz))
-        # print(111, B.shape, S.shape)
-
-    # elif method == 1:
-    #     # We solve by time step slices.
-    #     ##################################################################
-    #     S0t_interp = interpolator(tau, S0t, kind="cubic")
-    #     params_prop = params.copy()
-    #     params_prop["Nt"] = Nt_prop
-    #     dtau = tau[1] - tau[0]
-    #     params_prop["T"] = dtau
-    #     tau_slice = build_t_mesh(params_prop, uniform=True)
-    #
-    #     t00_eqs = time()
-    #     ##################################################################
-    #     # The equations are here!
-    #     aux1 = [params_prop, tau_slice, Z]
-    #     aux2 = {"Omegat": Omegat, "pt": pt, "pz": pz, "case": case,
-    #             "folder": folder, "plots": False,
-    #             "adiabatic": P0z is None}
-    #     Wp = eqs_fdm(*aux1, **aux2)
-    #
-    #     # We solve the system.
-    #     ##################################################################
-    #     if verbose > 0:
-    #         runtime_eqs = time()-t00_eqs
-    #         print("Eqs time: {} s.".format(runtime_eqs))
-    #     ##################################################################
-    #     # The for loop for propagation is this.
-    #     tt = 0
-    #     for tt in range(Nt-1):
-    #         if verbose > 1: print("t_{} = {}".format(tt, tau[tt]))
-    #         # We specify the block to solve.
-    #         tau_prop = tau[tt] + tau_slice
-    #         B0z_prop = B[tt, :]
-    #         S0z_prop = S[tt, :]
-    #         S0t_prop = S0t_interp(tau_prop)
-    #
-    #         aux1 = [params_prop, Wp, S0t_prop, S0z_prop, B0z_prop,
-    #                 tau_prop, Z]
-    #         aux2 = {"folder": folder, "plots": False, "P0z": P0z}
-    #         if P0z is None:
-    #             Bslice, Sslice = solve_fdm_subblock(*aux1, **aux2)
-    #             B[tt+1, :] = Bslice
-    #             S[tt+1, :] = Sslice
-    #         else:
-    #             Pslice, Bslice, Sslice = solve_fdm_subblock(*aux1, **aux2)
-    #             P[tt+1, :] = Pslice
-    #             B[tt+1, :] = Bslice
-    #             S[tt+1, :] = Sslice
-
     # Report running time.
     if verbose > 0:
         runtime_tot = time() - t00_tot
@@ -1579,6 +1515,7 @@ def solve(params, S0t=None, S0z=None, B0z=None, P0z=None, Omegat="square",
         if verbose > 0: t000f = time()
         params_memory = params.copy()
         params_memory["Nt"] = Nt2
+
         aux1 = [params_memory, S02t, S02z, B02z, tau2, Z]
         aux2 = {"Omegat": Omegat, "method": method, "pt": pt, "pz": pz,
                 "folder": folder, "plots": False,
@@ -1592,6 +1529,7 @@ def solve(params, S0t=None, S0z=None, B0z=None, P0z=None, Omegat="square",
             P[Nt1-1:Nt1+Nt2-1] = P2
             B[Nt1-1:Nt1+Nt2-1] = B2
             S[Nt1-1:Nt1+Nt2-1] = S2
+
         if verbose > 0: print("region 2 time : {:.3f} s".format(time()-t000f))
     # We solve in the storage region.
     if True:
@@ -1625,7 +1563,6 @@ def solve(params, S0t=None, S0z=None, B0z=None, P0z=None, Omegat="square",
                 S03z_reg = np.where(ttau3 <= t03 + (2*ZZ3+L)/c, 1.0, 0.0)
                 # The region determined by S03t
                 S03t_reg = 1 - S03z_reg
-
                 S03z_f = interpolator(Z, S03z, kind="cubic")
                 S03t_f = interpolator(tau3, S03t, kind="cubic")
 
@@ -1635,8 +1572,8 @@ def solve(params, S0t=None, S0z=None, B0z=None, P0z=None, Omegat="square",
 
                 S03t_reg = S03t_reg*S03t_f(ttau3 - (2*ZZ3+L)/c)
                 S03t_reg = S03t_reg*np.exp(-kappa**2/Gamma21*(ZZ3+L/2))
-
-                S[Nt1+Nt2-2:] = S03z_reg + S03t_reg
+                S3 = S03z_reg + S03t_reg
+                S[Nt1+Nt2-2:] = S3
             elif analytic_storage == 2:
                 aux1 = S03z_f(L/2 - (tau3-t03)*c/2)
                 aux1 = aux1*np.exp(-c*kappa**2/2/Gamma21*(tau3-t03))
@@ -1669,6 +1606,7 @@ def solve(params, S0t=None, S0z=None, B0z=None, P0z=None, Omegat="square",
             P[Nt1+Nt2-2:] = P3
             B[Nt1+Nt2-2:] = B3
             S[Nt1+Nt2-2:] = S3
+
         if verbose > 0: print("region 3 time : {:.3f} s".format(time()-t000f))
     if verbose > 0:
         print("Full exec time: {:.3f} s".format(time()-t00f))
