@@ -1023,9 +1023,6 @@ def calculate_optimal_input_tau(params, tau=None, with_critical_energy=True):
     if tau is None:
         tau = build_t_mesh(params)
 
-    # Old line:
-    # kappa = calculate_kappa(params)
-    # Gamma21 = calculate_Gamma21(params)
     delta_disp = calculate_delta_disp(params)
     g21 = calculate_g21(params)
 
@@ -1036,10 +1033,6 @@ def calculate_optimal_input_tau(params, tau=None, with_critical_energy=True):
     L = params["L"]
     tau0 = params["t0w"] - params["tauw"]/2
     S0tau = S0Z_interp(-L/2 - c*(tau-tau0)/2)
-
-    # Old line:
-    # S0tau = S0tau*np.exp(-kappa**2*(tau-tau0)/(4*Gamma21))
-    print(333, tau[0], tau[-1], tau0, delta_disp*g21)
 
     # This solution comes from the Other analytic solutions appendix.
     S0tau = S0tau*np.exp(-1j*delta_disp*g21*(tau-tau0))
@@ -1760,164 +1753,168 @@ def solve(params, S0t=None, S0z=None, B0z=None, P0z=None, Omegat="square",
             return tau, Z, B, S
     else:
         return tau, Z, P, B, S
-#
-#
-# def check_block_fdm(params, B, S, tau, Z, case=0, P=None,
-#                     pt=4, pz=4, folder="", plots=False, verbose=1):
-#     r"""Check the equations in an FDM block."""
-#     # We build the derivative operators.
-#     Nt = tau.shape[0]
-#     Nz = Z.shape[0]
-#     Gamma32 = calculate_Gamma32(params)
-#     Gamma21 = calculate_Gamma21(params)
-#     Omega = calculate_Omega(params)
-#     kappa = calculate_kappa(params)
-#     Dt = derivative_operator(tau, p=pt)
-#     Dz = derivative_operator(Z, p=pt)
-#
-#     adiabatic = P is None
-#
-#     # Empty space.
-#     if case == 0 and adiabatic:
-#         # We get the time derivatives.
-#         DtB = np.array([np.dot(Dt, B[:, jj]) for jj in range(Nz)]).T
-#         DtS = np.array([np.dot(Dt, S[:, jj]) for jj in range(Nz)]).T
-#
-#         DzS = np.array([np.dot(Dz, S[ii, :]) for ii in range(Nt)])
-#         rhsB = -Gamma32*B
-#         rhsS = -c/2*DzS
-#     # Storage phase.
-#     elif case == 1 and adiabatic:
-#         # We get the time derivatives.
-#         DtB = np.array([np.dot(Dt, B[:, jj]) for jj in range(Nz)]).T
-#         DtS = np.array([np.dot(Dt, S[:, jj]) for jj in range(Nz)]).T
-#
-#         DzS = np.array([np.dot(Dz, S[ii, :]) for ii in range(Nt)])
-#         rhsB = -Gamma32*B
-#         rhsS = -c/2*DzS - c*kappa**2/2/Gamma21*S
-#     # Memory write/read phase.
-#     elif case == 2 and adiabatic:
-#         # We get the time derivatives.
-#         DtB = np.array([np.dot(Dt, B[:, jj]) for jj in range(Nz)]).T
-#         DtS = np.array([np.dot(Dt, S[:, jj]) for jj in range(Nz)]).T
-#
-#         DzS = np.array([np.dot(Dz, S[ii, :]) for ii in range(Nt)])
-#         rhsB = -Gamma32*B
-#         rhsS = -c/2*DzS - c*kappa**2/2/Gamma21*S
-#
-#         rhsB += -np.abs(Omega)**2/Gamma21*B
-#         rhsB += -kappa*Omega/Gamma21*S
-#         rhsS += -c*kappa*np.conjugate(Omega)/2/Gamma21*B
-#
-#     else:
-#         raise ValueError
-#
-#     if True:
-#         # We put zeros into the boundaries.
-#         ig = pt/2 + 1
-#         ig = pt + 1
-#         ig = 1
-#
-#         DtB[:ig, :] = 0
-#         DtS[:ig, :] = 0
-#         DtS[:, :ig] = 0
-#
-#         rhsB[:ig, :] = 0
-#         rhsS[:ig, :] = 0
-#         rhsS[:, :ig] = 0
-#
-#         # We put zeros in all the boundaries to neglect border effects.
-#         DtB[-ig:, :] = 0
-#         DtS[-ig:, :] = 0
-#         DtB[:, :ig] = 0
-#         DtB[:, -ig:] = 0
-#         DtS[:, -ig:] = 0
-#
-#         rhsB[-ig:, :] = 0
-#         rhsS[-ig:, :] = 0
-#         rhsB[:, :ig] = 0
-#         rhsB[:, -ig:] = 0
-#         rhsS[:, -ig:] = 0
-#
-#     if True:
-#         Brerr = rel_error(DtB, rhsB)
-#         Srerr = rel_error(DtS, rhsS)
-#
-#         Bgerr = glo_error(DtB, rhsB)
-#         Sgerr = glo_error(DtS, rhsS)
-#
-#         i1, j1 = np.unravel_index(Srerr.argmax(), Srerr.shape)
-#         i2, j2 = np.unravel_index(Sgerr.argmax(), Sgerr.shape)
-#
-#         with warnings.catch_warnings():
-#             mes = r'divide by zero encountered in log10'
-#             warnings.filterwarnings('ignore', mes)
-#
-#             aux1 = list(np.log10(get_range(Brerr)))
-#             aux1 += [np.log10(np.mean(Brerr))]
-#             aux1 += list(np.log10(get_range(Srerr)))
-#             aux1 += [np.log10(np.abs(np.mean(Srerr)))]
-#
-#             aux2 = list(np.log10(get_range(Bgerr)))
-#             aux2 += [np.log10(np.mean(Bgerr))]
-#             aux2 += list(np.log10(get_range(Sgerr)))
-#             aux2 += [np.log10(np.mean(Sgerr))]
-#
-#         aux1[1], aux1[2] = aux1[2], aux1[1]
-#         aux1[-1], aux1[-2] = aux1[-2], aux1[-1]
-#         aux2[1], aux2[2] = aux2[2], aux2[1]
-#         aux2[-1], aux2[-2] = aux2[-2], aux2[-1]
-#
-#         if verbose > 0:
-#             print("Left and right hand sides comparison:")
-#             print("        Bmin   Bave   Bmax   Smin   Save   Smax")
-#             mes = "{:6.2f} {:6.2f} {:6.2f} {:6.2f} {:6.2f} {:6.2f}"
-#             print("rerr: "+mes.format(*aux1))
-#             print("gerr: "+mes.format(*aux2))
-#     if plots:
-#         args = [tau, Z, Brerr, Srerr, folder, "check_01_eqs_rerr"]
-#         kwargs = {"log": True, "ii": i1, "jj": j1}
-#         plot_solution(*args, **kwargs)
-#
-#         args = [tau, Z, Bgerr, Sgerr, folder, "check_02_eqs_gerr"]
-#         kwargs = {"log": True, "ii": i2, "jj": j2}
-#         plot_solution(*args, **kwargs)
-#
-#     return aux1, aux2, Brerr, Srerr, Bgerr, Sgerr
-#
-#
-# def check_fdm(params, B, S, tau, Z, P=None,
-#               pt=4, pz=4, folder="", name="check", plots=False, verbose=1):
-#     r"""Check the equations in an FDM block."""
-#     params, Z, tau, tau1, tau2, tau3 = build_mesh_fdm(params)
-#     N1 = len(tau1)
-#     N2 = len(tau2)
-#     # N3 = len(tau3)
-#
-#     # S1 = S[:N1]
-#     S2 = S[N1-1:N1-1+N2]
-#     # S3 = S[N1-1+N2-1:N1-1+N2-1+N3]
-#
-#     # B1 = B[:N1]
-#     B2 = B[N1-1:N1-1+N2]
-#     # B3 = B[N1-1+N2-1:N1-1+N2-1+N3]
-#
-#     Brerr = np.zeros(B.shape)
-#     Srerr = np.zeros(B.shape)
-#     Bgerr = np.zeros(B.shape)
-#     Sgerr = np.zeros(B.shape)
-#
-#     print("the log_10 of relative and global errors (for B and S):")
-#     ####################################################################
-#     kwargs = {"case": 2, "folder": folder, "plots": False}
-#     aux = check_block_fdm(params, B2, S2, tau2, Z, **kwargs)
-#     checks2_rerr, checks2_gerr, B2rerr, S2rerr, B2gerr, S2gerr = aux
-#
-#     Brerr[N1-1:N1-1+N2] = B2rerr
-#     Srerr[N1-1:N1-1+N2] = S2rerr
-#     Bgerr[N1-1:N1-1+N2] = B2gerr
-#     Sgerr[N1-1:N1-1+N2] = S2gerr
-#     ####################################################################
-#     if plots:
-#         plot_solution(tau, Z, Brerr, Srerr, folder, "rerr"+name, log=True)
-#         plot_solution(tau, Z, Bgerr, Sgerr, folder, "gerr"+name, log=True)
+
+
+def check_block_fdm(params, B, S, tau, Z, case=0, P=None,
+                    pt=4, pz=4, folder="", plots=False, verbose=1):
+    r"""Check the equations in an FDM block."""
+    # We build the derivative operators.
+    Nt = tau.shape[0]
+    Nz = Z.shape[0]
+    Gamma32 = calculate_Gamma32(params)
+    Gamma21 = calculate_Gamma21(params)
+    # Xi = calculate_Xi(params)
+    kappa = calculate_kappa(params)
+    Dt = derivative_operator(tau, p=pt)
+    Dz = derivative_operator(Z, p=pt)
+
+    delta_disp = calculate_delta_disp(params)
+    delta_stark = calculate_delta_stark(params)
+    g21 = calculate_g21(params)
+    g32Delta = calculate_g32Delta(params)
+    OmegaBS = calculate_OmegaBS(params)
+
+    adiabatic = P is None
+
+    # Empty space.
+    if case == 0 and adiabatic:
+        # We get the time derivatives.
+        DtB = np.array([np.dot(Dt, B[:, jj]) for jj in range(Nz)]).T
+        DtS = np.array([np.dot(Dt, S[:, jj]) for jj in range(Nz)]).T
+
+        DzS = np.array([np.dot(Dz, S[ii, :]) for ii in range(Nt)])
+        rhsB = 1j*g32Delta*B
+        rhsS = -c/2*DzS
+    # Storage phase.
+    elif case == 1 and adiabatic:
+        # We get the time derivatives.
+        DtB = np.array([np.dot(Dt, B[:, jj]) for jj in range(Nz)]).T
+        DtS = np.array([np.dot(Dt, S[:, jj]) for jj in range(Nz)]).T
+
+        DzS = np.array([np.dot(Dz, S[ii, :]) for ii in range(Nt)])
+        rhsB = 1j*g32Delta*B
+        rhsS = -c/2*DzS - 1j*delta_disp*g21*S
+    # Memory write/read phase.
+    elif case == 2 and adiabatic:
+        # We get the time derivatives.
+        DtB = np.array([np.dot(Dt, B[:, jj]) for jj in range(Nz)]).T
+        DtS = np.array([np.dot(Dt, S[:, jj]) for jj in range(Nz)]).T
+
+        DzS = np.array([np.dot(Dz, S[ii, :]) for ii in range(Nt)])
+
+        rhsB = 1j*(g32Delta + delta_stark*g21)*B - 1j/2*OmegaBS*g21*S
+        rhsS = - 1j/2*np.conjugate(OmegaBS)*g21*B
+        rhsS += - 1j*delta_disp*g21*S - c/2*DzS
+
+    else:
+        raise ValueError
+
+    if True:
+        # We put zeros into the boundaries.
+        ig = pt/2 + 1
+        ig = pt + 1
+        ig = 1
+
+        DtB[:ig, :] = 0
+        DtS[:ig, :] = 0
+        DtS[:, :ig] = 0
+
+        rhsB[:ig, :] = 0
+        rhsS[:ig, :] = 0
+        rhsS[:, :ig] = 0
+
+        # We put zeros in all the boundaries to neglect border effects.
+        DtB[-ig:, :] = 0
+        DtS[-ig:, :] = 0
+        DtB[:, :ig] = 0
+        DtB[:, -ig:] = 0
+        DtS[:, -ig:] = 0
+
+        rhsB[-ig:, :] = 0
+        rhsS[-ig:, :] = 0
+        rhsB[:, :ig] = 0
+        rhsB[:, -ig:] = 0
+        rhsS[:, -ig:] = 0
+
+    if True:
+        Brerr = rel_error(DtB, rhsB)
+        Srerr = rel_error(DtS, rhsS)
+
+        Bgerr = glo_error(DtB, rhsB)
+        Sgerr = glo_error(DtS, rhsS)
+
+        i1, j1 = np.unravel_index(Srerr.argmax(), Srerr.shape)
+        i2, j2 = np.unravel_index(Sgerr.argmax(), Sgerr.shape)
+
+        with warnings.catch_warnings():
+            mes = r'divide by zero encountered in log10'
+            warnings.filterwarnings('ignore', mes)
+
+            aux1 = list(np.log10(get_range(Brerr)))
+            aux1 += [np.log10(np.mean(Brerr))]
+            aux1 += list(np.log10(get_range(Srerr)))
+            aux1 += [np.log10(np.abs(np.mean(Srerr)))]
+
+            aux2 = list(np.log10(get_range(Bgerr)))
+            aux2 += [np.log10(np.mean(Bgerr))]
+            aux2 += list(np.log10(get_range(Sgerr)))
+            aux2 += [np.log10(np.mean(Sgerr))]
+
+        aux1[1], aux1[2] = aux1[2], aux1[1]
+        aux1[-1], aux1[-2] = aux1[-2], aux1[-1]
+        aux2[1], aux2[2] = aux2[2], aux2[1]
+        aux2[-1], aux2[-2] = aux2[-2], aux2[-1]
+
+        if verbose > 0:
+            print("Left and right hand sides comparison:")
+            print("        Bmin   Bave   Bmax   Smin   Save   Smax")
+            mes = "{:6.2f} {:6.2f} {:6.2f} {:6.2f} {:6.2f} {:6.2f}"
+            print("rerr: "+mes.format(*aux1))
+            print("gerr: "+mes.format(*aux2))
+    if plots:
+        args = [tau, Z, Brerr, Srerr, folder, "check_01_eqs_rerr"]
+        kwargs = {"log": True, "ii": i1, "jj": j1}
+        plot_solution(*args, **kwargs)
+
+        args = [tau, Z, Bgerr, Sgerr, folder, "check_02_eqs_gerr"]
+        kwargs = {"log": True, "ii": i2, "jj": j2}
+        plot_solution(*args, **kwargs)
+
+    return aux1, aux2, Brerr, Srerr, Bgerr, Sgerr
+
+
+def check_fdm(params, B, S, tau, Z, P=None,
+              pt=4, pz=4, folder="", name="check", plots=False, verbose=1):
+    r"""Check the equations in an FDM block."""
+    params, Z, tau, tau1, tau2, tau3 = build_mesh_fdm(params)
+    N1 = len(tau1)
+    N2 = len(tau2)
+    # N3 = len(tau3)
+
+    # S1 = S[:N1]
+    S2 = S[N1-1:N1-1+N2]
+    # S3 = S[N1-1+N2-1:N1-1+N2-1+N3]
+
+    # B1 = B[:N1]
+    B2 = B[N1-1:N1-1+N2]
+    # B3 = B[N1-1+N2-1:N1-1+N2-1+N3]
+
+    Brerr = np.zeros(B.shape)
+    Srerr = np.zeros(B.shape)
+    Bgerr = np.zeros(B.shape)
+    Sgerr = np.zeros(B.shape)
+
+    print("the log_10 of relative and global errors (for B and S):")
+    ####################################################################
+    kwargs = {"case": 2, "folder": folder, "plots": False}
+    aux = check_block_fdm(params, B2, S2, tau2, Z, **kwargs)
+    checks2_rerr, checks2_gerr, B2rerr, S2rerr, B2gerr, S2gerr = aux
+
+    Brerr[N1-1:N1-1+N2] = B2rerr
+    Srerr[N1-1:N1-1+N2] = S2rerr
+    Bgerr[N1-1:N1-1+N2] = B2gerr
+    Sgerr[N1-1:N1-1+N2] = S2gerr
+    ####################################################################
+    if plots:
+        plot_solution(tau, Z, Brerr, Srerr, folder, "rerr"+name, log=True)
+        plot_solution(tau, Z, Bgerr, Sgerr, folder, "gerr"+name, log=True)
