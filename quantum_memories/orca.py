@@ -749,6 +749,30 @@ def calculate_Delta(params):
     return delta1 + delta2
 
 
+def calculate_g21(params):
+    r"""Calculate g21, an almost-unity decoherence factor."""
+    delta1 = params["delta1"]
+    gamma21 = params["gamma21"]
+
+    return 1 - 1j*gamma21/2/delta1
+
+
+def calculate_g32(params):
+    r"""Calculate g32, an almost-unity decoherence factor."""
+    gamma32 = params["gamma32"]
+    Delta = calculate_Delta(params)
+
+    return 1 - 1j*gamma32/2/Delta
+
+
+def calculate_g32Delta(params):
+    r"""Calculate g32, an almost-unity decoherence factor."""
+    gamma32 = params["gamma32"]
+    Delta = calculate_Delta(params)
+
+    return Delta - 1j*gamma32/2
+
+
 def calculate_xi0(params):
     r"""Return xi0, the position of the peak for Gamma(xi)."""
     if not params["USE_SQUARE_CTRL"] or str(params["nwsquare"]) != "oo":
@@ -773,312 +797,315 @@ def calculate_xi0p(params):
     return np.abs(OmegaBS)/np.pi/c
 
 
+def calculate_optimal_delta2(params):
+    r"""Calculate the detuning of the control field to obtain two-photon
+    resonance and also compensate for Stark shifting and dispersion, while
+    at the same time havinv xi0 = 0 and flat phases for optimal modes.
+    """
+    delta1 = params["delta1"]
+    delta_stark = calculate_delta_stark(params)
+    delta_disp = calculate_delta_disp(params)
+
+    delta2 = -delta1 - delta_stark - delta_disp
+    return delta2
+
+
 def calculate_phi0(params):
     r"""Return phi0."""
     if not params["USE_SQUARE_CTRL"] or str(params["nwsquare"]) != "oo":
         mes = 'USE_SQUARE_CTRL must be True, and "nwsquare" must be "oo".'
         raise ValueError(mes)
-    delta1 = params["delta1"]
-    delta2 = params["delta2"]
+
+    TXi = params["tauw"]
+    delta_disp = calculate_delta_disp(params)
+    xi0 = calculate_xi0(params)
+
+    return TXi*(2*delta_disp + np.pi*c*xi0)
+
+
+def calculate_z0(params):
+    r"""Return z0."""
+    if not params["USE_SQUARE_CTRL"] or str(params["nwsquare"]) != "oo":
+        mes = 'USE_SQUARE_CTRL must be True, and "nwsquare" must be "oo".'
+        raise ValueError(mes)
+
+    TXi = params["tauw"]
+    return TXi*c/2
+
+
+def calculate_d0(params):
+    r"""Return d0."""
+    if not params["USE_SQUARE_CTRL"] or str(params["nwsquare"]) != "oo":
+        mes = 'USE_SQUARE_CTRL must be True, and "nwsquare" must be "oo".'
+        raise ValueError(mes)
+
+    TXi = params["tauw"]
+    gamma21 = params["gamma21"]
+    gamma32 = params["gamma32"]
+
+    delta_disp = calculate_delta_disp(params)
+    delta_stark = calculate_delta_stark(params)
+
+    return TXi*gamma21/2 * (delta_disp-delta_stark) + TXi*gamma32/2
+
+
+def calculate_Ctilde(params):
+    r"""Calculate the coupling Ctilde."""
+    if not params["USE_SQUARE_CTRL"] or str(params["nwsquare"]) != "oo":
+        mes = 'USE_SQUARE_CTRL must be True, and "nwsquare" must be "oo".'
+        raise ValueError(mes)
+    TXi = params["tauw"]
+    OmegaBS = calculate_OmegaBS(params)
+    g21 = calculate_g21(params)
+
+    return TXi*OmegaBS*g21
+
+
+def calculate_beta(params, xi=None):
+    r"""Return the beta function."""
+    if not params["USE_SQUARE_CTRL"] or str(params["nwsquare"]) != "oo":
+        mes = 'USE_SQUARE_CTRL must be True, and "nwsquare" must be "oo".'
+        raise ValueError(mes)
+
+    OmegaBS = calculate_OmegaBS(params)
+    delta_stark = calculate_delta_stark(params)
+    delta_disp = calculate_delta_disp(params)
+    g21 = calculate_g21(params)
+    g32Delta = calculate_g32Delta(params)
+
+    beta = g21**2*np.abs(OmegaBS)**2/4
+    beta += - (g32Delta + delta_stark*g21)*(-delta_disp*g21 - np.pi*c*xi)
+    aux = g32Delta/2 - delta_disp*g21/2 + delta_stark*g21/2 - np.pi*c*xi/2
+    beta += aux**2
+
+    return 2*np.sqrt(np.complex128(beta))/g21/np.abs(OmegaBS)
+
+
+def calculate_Gammap(params, xi=None):
+    r"""Return the beta function."""
+    if not params["USE_SQUARE_CTRL"] or str(params["nwsquare"]) != "oo":
+        mes = 'USE_SQUARE_CTRL must be True, and "nwsquare" must be "oo".'
+        raise ValueError(mes)
+    if xi is None:
+        Z = build_Z_mesh(params)
+        xi = ffftfreq(Z)
+
+    z0 = calculate_z0(params)
+    phi0 = calculate_phi0(params)
+
+    Ctilde = calculate_Ctilde(params)
+    beta = calculate_beta(params, xi)
+
+    Gammap = -Ctilde**2 * sinc(Ctilde*beta/2)**2 / 4
+    Gammap *= np.exp(-1j*(phi0 + 2*np.pi*z0*xi))
+    return Gammap
+
+
+def calculate_optimal_input_xi(params, xi=None, force_xi0=False,
+                               with_critical_energy=True):
+    r"""Calculate the optimal `xi`-space input for the given parameters.
+
+    Note that this returns a Gaussian pulse of time duration params["taus"]
+    """
+    params_ = params.copy()
+    if not params_["USE_SQUARE_CTRL"] or str(params_["nwsquare"]) != "oo":
+        mes = 'USE_SQUARE_CTRL must be True, and "nwsquare" must be "oo".'
+        raise ValueError(mes)
+    if xi is None:
+        Z = build_Z_mesh(params_)
+        xi = ffftfreq(Z)
+
+    if with_critical_energy:
+        energy_pulse2 = calculate_pulse_energy(params_)
+        params_["energy_pulse2"] = energy_pulse2
+    xi0 = calculate_xi0(params_)
+
+    taus = params_["taus"]
+    tauw = params_["tauw"]
+    DeltanuS_num = time_bandwith_product(1)/taus
+    DeltaxiS_num = DeltanuS_num*2/c
+    sigma_xi = DeltaxiS_num/(2*np.sqrt(np.log(2)))
+
+    # We make sure that the oscillations in the signal are not too fast.
+    Nu0 = np.abs(c*xi0)
+    if (taus*Nu0 > 5.0 or tauw*Nu0 > 5.0) and not force_xi0:
+        mes = "The optimal signal has a linear phase that is too fast "
+        mes += "for the grid to represent accurately. "
+        mes += "Using a flat phase instead."
+        mes += " Set force_xi0=True to override this (but don't Fourier"
+        mes += " transform into input for a z-space problem, please). "
+        mes += "The best thing is to set "
+        mes += "`params[delta2] = calculate_optimal_delta2(params)`"
+        warnings.warn(mes)
+        # warnings.filterwarnings('ignore', mes)
+        xi0 = 0.0
+
+    Zoff = params_["tauw"]/2*(c/2)
+    Sin = hermite_gauss(0, xi-xi0, sigma_xi)
+    Sin = Sin*np.exp(2*np.pi*1j*Zoff*xi)
+    # We normalize so that the integral of the signal mod square over tau
+    # is 1.
+    Sin = Sin*np.sqrt(c/2)
+    return xi, Sin
+
+
+def calculate_optimal_input_Z(params, Z=None, with_critical_energy=True):
+    r"""Calculate the optimal `Z`-space input for the given parameters.
+
+    Note this returns a Gaussian pulse of time duration params["taus"]
+    """
+    if not params["USE_SQUARE_CTRL"] or str(params["nwsquare"]) != "oo":
+        mes = 'USE_SQUARE_CTRL must be True, and "nwsquare" must be "oo".'
+        raise ValueError(mes)
+    if Z is None:
+        band = True
+        Zp = build_Z_mesh(params)
+    else:
+        band = False
+
+    # We get a reasonable xi and Z mesh.
+    xi0 = calculate_xi0(params)
+    Deltaxi = 2/c/params["tauw"]
+
+    a1 = xi0+20*Deltaxi/2
+    a2 = xi0-20*Deltaxi/2
+    aa = np.amax(np.abs(np.array([a1, a2])))
+    xi = np.linspace(-aa, aa, 1001)
+    kwargs = {"with_critical_energy": with_critical_energy}
+    xi, S0xi = calculate_optimal_input_xi(params, xi, **kwargs)
+
+    # We Fourier transform it.
+    Z = ffftfreq(xi)
+    S0Z = iffftfft(S0xi, xi)
+
+    taus = params["taus"]
     tauw = params["tauw"]
-    kappa = calculate_kappa(params)
-    Omega = calculate_Omega(params)
+    Nu0 = np.abs(c*xi0)
+    if taus*Nu0 > 5.0 or tauw*Nu0 > 5.0:
+        mes = "The optimal signal has a linear phase that is too fast "
+        mes += "for the grid to represent accurately. "
+        mes += "Using a flat phase instead."
+        warnings.warn(mes)
+        warnings.filterwarnings('ignore', mes)
+        xi0 = 0.0
 
-    phi0 = c*kappa**2 - 2*delta1**2 - 2*delta1*delta2 + 2*np.abs(Omega)**2
-    phi0 = tauw*(phi0)/(2*delta1)
-    return phi0
+        Z = np.linspace(-0.25, 0.25, 1001)
 
-#
-# def calculate_z0(params):
-#     r"""Return phi0."""
-#     if not params["USE_SQUARE_CTRL"] or str(params["nwsquare"]) != "oo":
-#         mes = 'USE_SQUARE_CTRL must be True, and "nwsquare" must be "oo".'
-#         raise ValueError(mes)
-#
-#     tauw = params["tauw"]
-#     return tauw*c/2
-#
-#
+        DeltanuS_num = time_bandwith_product(1)/taus
+        DeltaxiS_num = DeltanuS_num*2/c
+        sigma_xi = DeltaxiS_num/(2*np.sqrt(np.log(2)))
+        Zoff = tauw/2*(c/2)
 
-#
-#
+        Sin = hermite_gauss(0, xi-xi0, sigma_xi)
+        Sin = Sin*np.exp(2*np.pi*1j*Zoff*xi)*np.sqrt(c/2)
 
-#
-#
-# def calculate_Ctilde(params):
-#     r"""Calculate the coupling Ctilde."""
-#     if not params["USE_SQUARE_CTRL"] or str(params["nwsquare"]) != "oo":
-#         mes = 'USE_SQUARE_CTRL must be True, and "nwsquare" must be "oo".'
-#         raise ValueError(mes)
-#     tauw = params["tauw"]
-#     Omega = calculate_Omega(params)
-#     kappa = calculate_kappa(params)
-#     Gamma21 = calculate_Gamma21(params)
-#     Ctilde = tauw*kappa*Omega*np.sqrt(c/2)/np.sqrt(-Gamma21**2)
-#     return Ctilde
-#
-#
-# def calculate_beta(params, xi=None):
-#     r"""Return the beta function."""
-#     if not params["USE_SQUARE_CTRL"] or str(params["nwsquare"]) != "oo":
-#         mes = 'USE_SQUARE_CTRL must be True, and "nwsquare" must be "oo".'
-#         raise ValueError(mes)
-#     if xi is None:
-#         Z = build_Z_mesh(params)
-#         xi = ffftfreq(Z)
-#     Gamma21 = calculate_Gamma21(params)
-#     Gamma32 = calculate_Gamma32(params)
-#     Omega = calculate_Omega(params)
-#     kappa = calculate_kappa(params)
-#
-#     beta = np.zeros(xi.shape[0], complex)
-#     beta += Omega*np.conj(Omega)/(2*np.abs(Omega)**2)
-#     beta += -Gamma21*Gamma32/(2*np.abs(Omega)**2)
-#     beta += c*kappa**2/(8*np.abs(Omega)**2)
-#     beta += Gamma21**2*Gamma32**2/(2*c*kappa**2*np.abs(Omega)**2)
-#     beta += Omega**2*np.conj(Omega)**2/(2*c*kappa**2*np.abs(Omega)**2)
-#     beta += 1j*np.pi*Gamma21*c*xi/(2*np.abs(Omega)**2)
-#     beta += -np.pi**2*Gamma21**2*c*xi**2/(2*kappa**2*np.abs(Omega)**2)
-#     beta += Gamma21*Gamma32*Omega*np.conj(Omega)/(c*kappa**2*np.abs(Omega)**2)
-#     beta += -1j*np.pi*Gamma21**2*Gamma32*xi/(kappa**2*np.abs(Omega)**2)
-#     aux = -1j*np.pi*Gamma21*Omega*xi*np.conj(Omega)
-#     beta += aux/(kappa**2*np.abs(Omega)**2)
-#     beta = np.sqrt(beta)
-#
-#     return beta
-#
-#
-# def calculate_F(params, xi=None):
-#     r"""Return the beta function."""
-#     if not params["USE_SQUARE_CTRL"] or str(params["nwsquare"]) != "oo":
-#         mes = 'USE_SQUARE_CTRL must be True, and "nwsquare" must be "oo".'
-#         raise ValueError(mes)
-#     if xi is None:
-#         Z = build_Z_mesh(params)
-#         xi = ffftfreq(Z)
-#
-#     z0 = calculate_z0(params)
-#     phi0 = calculate_phi0(params)
-#
-#     Ctilde = calculate_Ctilde(params)
-#     beta = calculate_beta(params, xi)
-#
-#     Fxi = -Ctilde**2*np.exp(-1j*(phi0 + 2*np.pi*z0*xi))*sinc(Ctilde*beta)**2
-#     return Fxi
-#
-#
-# def calculate_optimal_delta2(params):
-#     r"""Calculate the detuning of the control field to obtain two-photon
-#     resonance and also compensate for Stark shifting.
-#     """
-#     delta1 = params["delta1"]
-#     delta2 = params["delta2"]
-#     Omega = calculate_Omega(params)
-#     kappa = calculate_kappa(params)
-#     delta2 = - delta1 + (np.abs(Omega)**2 - c/2*kappa**2)/delta1
-#
-#     return delta2
-#
-#
-# def calculate_optimal_input_xi(params, xi=None, force_xi0=False,
-#                                with_critical_energy=True):
-#     r"""Calculate the optimal `xi`-space input for the given parameters.
-#
-#     Note that this returns a Gaussian pulse of time duration params["taus"]
-#     """
-#     params_ = params.copy()
-#     if not params_["USE_SQUARE_CTRL"] or str(params_["nwsquare"]) != "oo":
-#         mes = 'USE_SQUARE_CTRL must be True, and "nwsquare" must be "oo".'
-#         raise ValueError(mes)
-#     if xi is None:
-#         Z = build_Z_mesh(params_)
-#         xi = ffftfreq(Z)
-#
-#     if with_critical_energy:
-#         energy_pulse2 = calculate_pulse_energy(params_)
-#         params_["energy_pulse2"] = energy_pulse2
-#     xi0 = calculate_xi0(params_)
-#
-#     taus = params_["taus"]
-#     tauw = params_["tauw"]
-#     DeltanuS_num = time_bandwith_product(1)/taus
-#     DeltaxiS_num = DeltanuS_num*2/c
-#     sigma_xi = DeltaxiS_num/(2*np.sqrt(np.log(2)))
-#
-#     # We make sure that the oscillations in the signal are not too fast.
-#     Nu0 = np.abs(c*xi0)
-#     if (taus*Nu0 > 5.0 or tauw*Nu0 > 5.0) and not force_xi0:
-#         mes = "The optimal signal has a linear phase that is too fast "
-#         mes += "for the grid to represent accurately. "
-#         mes += "Using a flat phase instead."
-#         mes += " Set force_xi0=True to override this (but don't Fourier"
-#         mes += " transform into input for a z-space problem, please). "
-#         mes += "The best thing is to set "
-#         mes += "`params[delta2] = calculate_optimal_delta2(params)`"
-#         warnings.warn(mes)
-#         # warnings.filterwarnings('ignore', mes)
-#         xi0 = 0.0
-#
-#     Zoff = params_["tauw"]/2*(c/2)
-#     Sin = hermite_gauss(0, xi-xi0, sigma_xi)
-#     Sin = Sin*np.exp(2*np.pi*1j*Zoff*xi)
-#     # We normalize so that the integral of the signal mod square over tau
-#     # is 1.
-#     Sin = Sin*np.sqrt(c/2)
-#     return xi, Sin
-#
-#
-# def calculate_optimal_input_Z(params, Z=None, with_critical_energy=True):
-#     r"""Calculate the optimal `Z`-space input for the given parameters.
-#
-#     Note this returns a Gaussian pulse of time duration params["taus"]
-#     """
-#     if not params["USE_SQUARE_CTRL"] or str(params["nwsquare"]) != "oo":
-#         mes = 'USE_SQUARE_CTRL must be True, and "nwsquare" must be "oo".'
-#         raise ValueError(mes)
-#     if Z is None:
-#         band = True
-#         Zp = build_Z_mesh(params)
-#     else:
-#         band = False
-#
-#     # We get a reasonable xi and Z mesh.
-#     xi0 = calculate_xi0(params)
-#     Deltaxi = 2/c/params["tauw"]
-#
-#     a1 = xi0+20*Deltaxi/2
-#     a2 = xi0-20*Deltaxi/2
-#     aa = np.amax(np.abs(np.array([a1, a2])))
-#     xi = np.linspace(-aa, aa, 1001)
-#     kwargs = {"with_critical_energy": with_critical_energy}
-#     xi, S0xi = calculate_optimal_input_xi(params, xi, **kwargs)
-#
-#     # We Fourier transform it.
-#     Z = ffftfreq(xi)
-#     S0Z = iffftfft(S0xi, xi)
-#
-#     taus = params["taus"]
-#     tauw = params["tauw"]
-#     Nu0 = np.abs(c*xi0)
-#     if taus*Nu0 > 5.0 or tauw*Nu0 > 5.0:
-#         mes = "The optimal signal has a linear phase that is too fast "
-#         mes += "for the grid to represent accurately. "
-#         mes += "Using a flat phase instead."
-#         warnings.warn(mes)
-#         warnings.filterwarnings('ignore', mes)
-#         xi0 = 0.0
-#
-#         Z = np.linspace(-0.25, 0.25, 1001)
-#
-#         DeltanuS_num = time_bandwith_product(1)/taus
-#         DeltaxiS_num = DeltanuS_num*2/c
-#         sigma_xi = DeltaxiS_num/(2*np.sqrt(np.log(2)))
-#         Zoff = tauw/2*(c/2)
-#
-#         Sin = hermite_gauss(0, xi-xi0, sigma_xi)
-#         Sin = Sin*np.exp(2*np.pi*1j*Zoff*xi)*np.sqrt(c/2)
-#
-#         # S0Z = hermite_gauss(0, Z+Zoff, 1/np.pi**2*np.sqrt(2)/sigma_xi)
-#         S0Z = hermite_gauss(0, Z+Zoff, 1/2.0/np.pi/sigma_xi)
-#         S0Z = S0Z*np.sqrt(c/2)
-#         # S0Z = S0Z*np.exp(2*np.pi*1j*Zoff*xi)*np.sqrt(c/2)
-#
-#     if not band:
-#         S0Z_interp = interpolator(Z, S0Z, kind="cubic")
-#         S0Z = S0Z_interp(Zp)
-#         return Zp, S0Z
-#     else:
-#         return Z, S0Z
-#
-#
-# def calculate_optimal_input_tau(params, tau=None, with_critical_energy=True):
-#     r"""Calculate the optimal `tau`-space input for the given parameters.
-#
-#     Note this returns a Gaussian pulse of time duration params["taus"]
-#     """
-#     if not params["USE_SQUARE_CTRL"] or str(params["nwsquare"]) != "oo":
-#         mes = 'USE_SQUARE_CTRL must be True, and "nwsquare" must be "oo".'
-#         raise ValueError(mes)
-#     if tau is None:
-#         tau = build_t_mesh(params)
-#
-#     kappa = calculate_kappa(params)
-#     Gamma21 = calculate_Gamma21(params)
-#
-#     kwargs = {"with_critical_energy": with_critical_energy}
-#     Z, S0Z = calculate_optimal_input_Z(params, **kwargs)
-#     S0Z_interp = interpolator(Z, S0Z, kind="cubic")
-#
-#     L = params["L"]
-#     tau0 = params["t0w"] - params["tauw"]/2
-#     S0tau = S0Z_interp(-L/2 - c*(tau-tau0)/2)
-#
-#     S0tau = S0tau*np.exp(-c*kappa**2*(tau-tau0)/(2*Gamma21))
-#     S0tau = S0tau/np.sqrt(num_integral(np.abs(S0tau)**2, tau))
-#
-#     return tau, S0tau
-#
-#
-# def approximate_optimal_input(params, tau=None, Z=None, mode="hg0", shift=0.0):
-#     r"""Get optimal input."""
-#     c = params["c"]
-#     xi0 = calculate_xi0(params)
-#     phi0 = calculate_phi0(params)
-#     Zoff = params["tauw"]/2*(c/2)
-#     kappa0 = calculate_kappa(params)
-#     Gamma21 = calculate_Gamma21(params)
-#     L = params["L"]
-#
-#     taus = params["taus"]
-#     DeltanuS_num = time_bandwith_product(1)/taus
-#     DeltaxiS_num = DeltanuS_num*2/c
-#     sig_xi = DeltaxiS_num/(2*np.sqrt(np.log(2)))
-#     sig_z = 1/2/np.pi/sig_xi
-#
-#     t0 = params["t0w"] - params["tauw"]/2
-#     t0 = - params["tauw"]/2 + shift*L/c
-#     # t0 = 0.0
-#
-#     if not params["USE_SQUARE_CTRL"] or str(params["nwsquare"]) != "oo":
-#         mes = 'USE_SQUARE_CTRL must be True, and "nwsquare" must be "oo".'
-#         raise ValueError(mes)
-#     if tau is None:
-#         tau = build_t_mesh(params)
-#     if Z is None:
-#         Z = build_Z_mesh(params)
-#
-#     tau0 = -c*t0/2 + L/2 - Zoff
-#     # tau0 = -c*t0/2 + L/2 #- Zoff
-#     #########################################################
-#     S0t = np.exp(2*1j*np.pi*xi0*(-c*tau/2-tau0))
-#     S0t *= np.exp(1j*phi0)
-#     # S0t *= hermite_gauss(0, -c*tau/2 - tau0, sig_t)
-#     if mode[:2] == "hg":
-#         nn = int(mode[-1])
-#         S0t *= hermite_gauss(nn, -c*tau/2 - tau0, sig_z)
-#     elif mode[:2] == "ha":
-#         nn = int(mode[-1])
-#         S0t *= harmonic(nn, -c*tau/2 - tau0, taus*c)
-#     else:
-#         raise ValueError
-#     S0t *= np.exp(-c*kappa0**2*(tau-t0)/(2*Gamma21))*np.sqrt(c/2)
-#
-#     #########################################################
-#     tau0 = -c*t0/2 - Z - Zoff
-#     tau_ini = tau[0]
-#     S0z = np.exp(2*1j*np.pi*xi0*(-c*tau_ini/2-tau0))
-#     S0z *= np.exp(1j*phi0)
-#     if mode[:2] == "hg":
-#         nn = int(mode[-1])
-#         S0z *= hermite_gauss(0, -c*tau_ini/2 - tau0, sig_z)
-#     elif mode[:2] == "ha":
-#         nn = int(mode[-1])
-#         S0z *= harmonic(1, -c*tau_ini/2 - tau0, taus*c)
-#     S0z *= np.exp(-c*kappa0**2*(tau_ini-t0)/(2*Gamma21))*np.sqrt(c/2)
-#
-#     return S0t, S0z, tau, Z
-#
-#
+        # S0Z = hermite_gauss(0, Z+Zoff, 1/np.pi**2*np.sqrt(2)/sigma_xi)
+        S0Z = hermite_gauss(0, Z+Zoff, 1/2.0/np.pi/sigma_xi)
+        S0Z = S0Z*np.sqrt(c/2)
+        # S0Z = S0Z*np.exp(2*np.pi*1j*Zoff*xi)*np.sqrt(c/2)
+
+    if not band:
+        S0Z_interp = interpolator(Z, S0Z, kind="cubic")
+        S0Z = S0Z_interp(Zp)
+        return Zp, S0Z
+    else:
+        return Z, S0Z
+
+
+def calculate_optimal_input_tau(params, tau=None, with_critical_energy=True):
+    r"""Calculate the optimal `tau`-space input for the given parameters.
+
+    Note this returns a Gaussian pulse of time duration params["taus"]
+    """
+    if not params["USE_SQUARE_CTRL"] or str(params["nwsquare"]) != "oo":
+        mes = 'USE_SQUARE_CTRL must be True, and "nwsquare" must be "oo".'
+        raise ValueError(mes)
+    if tau is None:
+        tau = build_t_mesh(params)
+
+    # Old line:
+    # kappa = calculate_kappa(params)
+    # Gamma21 = calculate_Gamma21(params)
+    delta_disp = calculate_delta_disp(params)
+    g21 = calculate_g21(params)
+
+    kwargs = {"with_critical_energy": with_critical_energy}
+    Z, S0Z = calculate_optimal_input_Z(params, **kwargs)
+    S0Z_interp = interpolator(Z, S0Z, kind="cubic")
+
+    L = params["L"]
+    tau0 = params["t0w"] - params["tauw"]/2
+    S0tau = S0Z_interp(-L/2 - c*(tau-tau0)/2)
+
+    # Old line:
+    # S0tau = S0tau*np.exp(-kappa**2*(tau-tau0)/(4*Gamma21))
+    print(333, tau[0], tau[-1], tau0, delta_disp*g21)
+
+    # This solution comes from the Other analytic solutions appendix.
+    S0tau = S0tau*np.exp(-1j*delta_disp*g21*(tau-tau0))
+    S0tau = S0tau/np.sqrt(num_integral(np.abs(S0tau)**2, tau))
+
+    return tau, S0tau
+
+
+def approximate_optimal_input(params, tau=None, Z=None, mode="hg0", shift=0.0):
+    r"""Get optimal input."""
+    c = params["c"]
+    xi0 = calculate_xi0(params)
+    phi0 = calculate_phi0(params)
+    Zoff = params["tauw"]/2*(c/2)
+    kappa0 = calculate_kappa(params)
+    Gamma21 = calculate_Gamma21(params)
+    L = params["L"]
+
+    taus = params["taus"]
+    DeltanuS_num = time_bandwith_product(1)/taus
+    DeltaxiS_num = DeltanuS_num*2/c
+    sig_xi = DeltaxiS_num/(2*np.sqrt(np.log(2)))
+    sig_z = 1/2/np.pi/sig_xi
+
+    t0 = params["t0w"] - params["tauw"]/2
+    t0 = - params["tauw"]/2 + shift*L/c
+    # t0 = 0.0
+
+    if not params["USE_SQUARE_CTRL"] or str(params["nwsquare"]) != "oo":
+        mes = 'USE_SQUARE_CTRL must be True, and "nwsquare" must be "oo".'
+        raise ValueError(mes)
+    if tau is None:
+        tau = build_t_mesh(params)
+    if Z is None:
+        Z = build_Z_mesh(params)
+
+    tau0 = -c*t0/2 + L/2 - Zoff
+    # tau0 = -c*t0/2 + L/2 #- Zoff
+    #########################################################
+    S0t = np.exp(2*1j*np.pi*xi0*(-c*tau/2-tau0))
+    S0t *= np.exp(1j*phi0)
+    # S0t *= hermite_gauss(0, -c*tau/2 - tau0, sig_t)
+    if mode[:2] == "hg":
+        nn = int(mode[-1])
+        S0t *= hermite_gauss(nn, -c*tau/2 - tau0, sig_z)
+    elif mode[:2] == "ha":
+        nn = int(mode[-1])
+        S0t *= harmonic(nn, -c*tau/2 - tau0, taus*c)
+    else:
+        raise ValueError
+    S0t *= np.exp(-c*kappa0**2*(tau-t0)/(2*Gamma21))*np.sqrt(c/2)
+
+    #########################################################
+    tau0 = -c*t0/2 - Z - Zoff
+    tau_ini = tau[0]
+    S0z = np.exp(2*1j*np.pi*xi0*(-c*tau_ini/2-tau0))
+    S0z *= np.exp(1j*phi0)
+    if mode[:2] == "hg":
+        nn = int(mode[-1])
+        S0z *= hermite_gauss(0, -c*tau_ini/2 - tau0, sig_z)
+    elif mode[:2] == "ha":
+        nn = int(mode[-1])
+        S0z *= harmonic(1, -c*tau_ini/2 - tau0, taus*c)
+    S0z *= np.exp(-c*kappa0**2*(tau_ini-t0)/(2*Gamma21))*np.sqrt(c/2)
+
+    return S0t, S0z, tau, Z
 
 
 def calculate_pulse_energy(params, order=0):
@@ -1100,601 +1127,639 @@ def calculate_pulse_energy(params, order=0):
     En = np.pi**3*(delta1*hbar*w2)**2
     return En/(tauw*mu_0*c*(r2*e_charge*kappa)**2)
 
-#
-#
-# def calculate_efficiencies(tau, Z, Bw, Sw, Br, Sr, verbose=0):
-#     r"""Calculate the memory efficiencies for a given write-read
-#     process.
-#
-#     These are the total memory efficiency, TB, RS, RB, TS.
-#     """
-#     L = Z[-1] - Z[0]
-#     tau_iniS = tau[0]
-#     tau_iniQ = tau_iniS - L*2/c
-#     tauQ0 = (tau_iniS-tau_iniQ)/(Z[0]-Z[-1])*(Z-Z[0]) + tau_iniS
-#
-#     tau_finS = tau[-1]
-#     tau_finQ = tau_finS + L*2/c
-#     tauQf = (tau_finS-tau_finQ)/(Z[-1]-Z[0])*(Z-Z[-1]) + tau_finS
-#
-#     # The initial photon number.
-#     NS = num_integral(np.abs(Sw[:, 0])**2, tau)
-#     NS += num_integral(np.abs(Sw[0, :])**2, tauQ0)
-#     # The transmitted photon number.
-#     NST = num_integral(np.abs(Sw[:, -1])**2, tau)
-#     NST += num_integral(np.abs(Sw[-1, :])**2, tauQf)
-#     # The retrieved photon number.
-#     Nf = num_integral(np.abs(Sr[:, -1])**2, tau)
-#     Nf += num_integral(np.abs(Sr[-1, :])**2, tauQf)
-#     # The initial spin-wave number.
-#     NB = num_integral(np.abs(Br[0, :])**2, tau)
-#     # The transmitted. spin-wave number.
-#     NBT = num_integral(np.abs(Br[-1, :])**2, tau)
-#
-#     # Nt1 = tau1.shape[0]
-#     # S0Z_num = Sw[Nt1-1, :]
-#
-#     TS = NST/NS
-#     RS = 1 - TS
-#
-#     TB = NBT/NB
-#     RB = 1 - TB
-#
-#     eta_num = Nf/NS
-#
-#     if verbose > 0:
-#         print("Numerical efficiency      : {:.4f}".format(eta_num))
-#         print("")
-#         print("Beam-splitter picture transmissivities and reflectivities:")
-#         print("TB: {:.4f}, RS: {:.4f}".format(TB, RS))
-#         print("RB: {:.4f}, TS: {:.4f}".format(RB, TS))
-#
-#     return eta_num, TB, RS, RB, TS
-#
-#
-# #############################################################################
-# # Finite difference ORCA routines.
-#
-#
-# def eqs_fdm(params, tau, Z, Omegat="square", case=0, adiabatic=True,
-#             pt=4, pz=4, plots=False, folder="", sparse=False):
-#     r"""Calculate the matrix form of equations `Wp X = 0`."""
-#     if not adiabatic:
-#         nv = 3
-#     else:
-#         nv = 2
-#     # We unpack parameters.
-#     if True:
-#         with_focusing = params["with_focusing"]
-#         Nt = tau.shape[0]
-#         Nz = Z.shape[0]
-#         Gamma21 = calculate_Gamma21(params)
-#         Gamma32 = calculate_Gamma32(params)
-#         kappa = calculate_kappa(params)
-#         Omega0 = calculate_Omega(params)
-#
-#         tauw = params["tauw"]
-#
-#         nX = nv*Nt*Nz
-#         Ntz = Nt*Nz
-#     # We build the derivative matrices.
-#     if True:
-#         args = [tau, Z]
-#         kwargs = {"pt": pt, "pz": pz, "plots": plots, "folder": folder,
-#                   "sparse": sparse}
-#         DT, DZ = fdm_derivative_operators(*args, **kwargs)
-#
-#     # We calculate Omega(tau, z) as an array, and then as a flattened,
-#     # diagonal matrix.
-#     w0Xi = params["w2"]
-#     zRS, zRXi = rayleigh_range(params)
-#     wXi = w0Xi*np.sqrt(1 + (Z/zRXi)**2)
-#
-#     if with_focusing:
-#         Omegaz = Omega0*w0Xi/wXi
-#     else:
-#         Omegaz = Omega0*np.ones(Nz)
-#
-#     if Omegat == "square":
-#         Omegatauz = np.outer(np.ones(Nt), Omegaz).flatten()
-#     elif with_focusing:
-#         Omegatauz = Omega0*np.sqrt(tauw)
-#         Omegatauz *= np.outer(Omegat(tau), w0Xi/wXi).flatten()
-#     else:
-#         Omegatauz = Omega0*np.sqrt(tauw)
-#         Omegatauz *= np.outer(Omegat(tau), np.ones(Nz)).flatten()
-#
-#     if sparse:
-#         eye = sp_eye(Ntz, format=bfmt)
-#         A = bfmtf((nX, nX), dtype=np.complex128)
-#         Omega = spdiags(Omegatauz, [0], Ntz, Ntz, format=bfmt)
-#     else:
-#         eye = np.eye(Ntz)
-#         A = np.zeros((nX, nX), complex)
-#         Omega = np.diag(Omegatauz)
-#
-#     # We build the A matrix.
-#     if True:
-#         # Empty space.
-#         if case == 0 and adiabatic:
-#             # We set the time derivatives.
-#             A = set_block(A, 0, 0, DT)
-#             A = set_block(A, 1, 1, DT)
-#
-#             # We set the right-hand side terms.
-#             A = set_block(A, 0, 0, Gamma32*eye)
-#             A = set_block(A, 1, 1, c/2*DZ)
-#         # Storage phase.
-#         elif case == 1 and adiabatic:
-#             # We set the time derivatives.
-#             A = set_block(A, 0, 0, DT)
-#             A = set_block(A, 1, 1, DT)
-#
-#             # We set the right-hand side terms.
-#             A = set_block(A, 0, 0, Gamma32*eye)
-#             A = set_block(A, 1, 1, c*kappa**2/2/Gamma21*eye)
-#             A = set_block(A, 1, 1, c/2*DZ)
-#         # Memory write/read phase.
-#         elif case == 2 and adiabatic:
-#             # We set the time derivatives.
-#             A = set_block(A, 0, 0, DT)
-#             A = set_block(A, 1, 1, DT)
-#
-#             # We set the right-hand side terms.
-#             A = set_block(A, 0, 0, Gamma32*eye)
-#             A = set_block(A, 1, 1, c*kappa**2/2/Gamma21*eye)
-#             A = set_block(A, 1, 1, c/2*DZ)
-#
-#             aux1 = np.abs(Omega)**2/Gamma21
-#             aux2 = kappa*Omega/Gamma21
-#             aux3 = c*kappa*np.conjugate(Omega)/2/Gamma21
-#
-#             A = set_block(A, 0, 0, aux1)
-#             A = set_block(A, 0, 1, aux2)
-#             A = set_block(A, 1, 0, aux3)
-#
-#         elif case == 0 and not adiabatic:
-#             # We set the time derivatives.
-#             A = set_block(A, 0, 0, DT)
-#             A = set_block(A, 1, 1, DT)
-#             A = set_block(A, 2, 2, DT)
-#
-#             # We set the right-hand side terms.
-#             A = set_block(A, 0, 0, Gamma21*eye)
-#             A = set_block(A, 1, 1, Gamma32*eye)
-#             A = set_block(A, 2, 2, c/2*DZ)
-#
-#         elif case == 1 and not adiabatic:
-#             # We set the time derivatives.
-#             A = set_block(A, 0, 0, DT)
-#             A = set_block(A, 1, 1, DT)
-#             A = set_block(A, 2, 2, DT)
-#
-#             # We set the right-hand side terms.
-#             A = set_block(A, 0, 0, Gamma21*eye)
-#             A = set_block(A, 1, 1, Gamma32*eye)
-#             A = set_block(A, 2, 2, c/2*DZ)
-#             A = set_block(A, 0, 2, 1j*kappa*eye)
-#             A = set_block(A, 2, 0, 1j*kappa*c/2*eye)
-#         elif case == 2 and not adiabatic:
-#             # We set the time derivatives.
-#             A = set_block(A, 0, 0, DT)
-#             A = set_block(A, 1, 1, DT)
-#             A = set_block(A, 2, 2, DT)
-#
-#             # We set the right-hand side terms.
-#             A = set_block(A, 0, 0, Gamma21*eye)
-#             A = set_block(A, 1, 1, Gamma32*eye)
-#             A = set_block(A, 2, 2, c/2*DZ)
-#             A = set_block(A, 0, 2, 1j*kappa*eye)
-#             A = set_block(A, 2, 0, 1j*kappa*c/2*eye)
-#
-#             A = set_block(A, 0, 1, 1j*np.conjugate(Omega))
-#             A = set_block(A, 1, 0, 1j*Omega)
-#
-#     if plots:
-#         ################################################################
-#         # Plotting Wp.
-#         plt.figure(figsize=(15, 15))
-#         plt.title("$A'$")
-#         plt.imshow(np.log(np.abs(A)))
-#         plt.savefig(folder+"A.png", bbox_inches="tight")
-#         plt.close("all")
-#
-#     return A
-#
-#
-# def solve_fdm_block(params, S0t, S0z, B0z, tau, Z, P0z=None, Omegat="square",
-#                     case=0, method=0, pt=4, pz=4,
-#                     plots=False, folder="", name="", verbose=0):
-#     r"""We solve using the finite difference method for given
-#     boundary conditions, and with time and space precisions `pt` and `pz`.
-#
-#     INPUT:
-#
-#     -  ``params`` - dict, the problem's parameters.
-#
-#     -  ``S0t`` - array, the S(Z=-L/2, t) boundary condition.
-#
-#     -  ``S0z`` - array, the S(Z, t=0) boundary condition.
-#
-#     -  ``B0z`` - array, the B(Z, t=0) boundary condition.
-#
-#     -  ``tau`` - array, the time axis.
-#
-#     -  ``Z`` - array, the space axis.
-#
-#     -  ``P0z`` - array, the P(Z, t=0) boundary condition (default None).
-#
-#     -  ``Omegat`` - function, a function that returns the temporal mode of the
-#                     Rabi frequency at time tau (default "square").
-#
-#     -  ``case`` - int, the dynamics to solve for: 0 for free space, 1 for
-#                   propagation through vapour, 2 for propagation through vapour
-#                   and non-zero control field.
-#
-#     -  ``method`` - int, the fdm method to use: 0 to solve the full space, 1
-#                   to solve by time step slices.
-#
-#     -  ``pt`` - int, the precision order for the numerical time derivate. Must
-#                 be even.
-#
-#     -  ``pz`` - int, the precision order for the numerical space derivate. Must
-#                 be even.
-#
-#     -  ``plots`` - bool, whether to make plots.
-#
-#     -  ``folder`` - str, the directory to save plots in.
-#
-#     -  ``verbose`` - int, a vague measure much of messages to print.
-#
-#     OUTPUT:
-#
-#     A solution to the equations for the given case and boundary conditions.
-#
-#     """
-#     t00_tot = time()
-#     # We unpack parameters.
-#     if True:
-#         Nt = params["Nt"]
-#         Nz = params["Nz"]
-#         # Nt_prop = pt + 1
-#
-#         # The number of functions.
-#         nv = 2
-#     # We make pre-calculations.
-#     if True:
-#         if P0z is not None:
-#             P = np.zeros((Nt, Nz), complex)
-#             P[0, :] = P0z
-#         B = np.zeros((Nt, Nz), complex)
-#         S = np.zeros((Nt, Nz), complex)
-#         B[0, :] = B0z
-#         S[0, :] = S0z
-#     if method == 0:
-#         # We solve the full block.
-#         sparse = True
-#         aux1 = [params, tau, Z]
-#         aux2 = {"Omegat": Omegat, "pt": pt, "pz": pz, "case": case,
-#                 "folder": folder, "plots": False, "sparse": sparse,
-#                 "adiabatic": P0z is None}
-#         # print(Omegat)
-#         t00 = time()
-#         A = eqs_fdm(*aux1, **aux2)
-#         if verbose > 0: print("FDM Eqs time  : {:.3f} s".format(time()-t00))
-#         #############
-#         # New method.
-#         # We get the input indices.
-#         t00 = time()
-#         auxi = np.arange(nv*Nt*Nz).reshape((nv, Nt, Nz))
-#         indsB0 = auxi[0, 0, :].tolist()
-#         indsQ0 = np.flip(auxi[1, 0, :]).tolist()
-#         indsS0 = auxi[1, :, 0].tolist()
-#         inds0_ = indsB0 + indsQ0 + indsS0
-#
-#         indsBf = auxi[0, -1, :].tolist()
-#         indsSf = auxi[1, :, -1].tolist()
-#         indsQf = np.flip(auxi[1, -1, :]).tolist()
-#         indsf_ = indsBf + indsSf + indsQf
-#         indsf_ = auxi.flatten().tolist()
-#
-#         # We build the input vector.
-#         input = np.zeros((len(inds0_), 1), complex)
-#         input[:Nz, 0] = B0z
-#         input[Nz:2*Nz, 0] = np.flip(S0z)
-#         input[2*Nz:, 0] = S0t
-#
-#         Y = solve_fdm(A, inds0_, indsf_, input=input)
-#         B, S = np.reshape(Y, (nv, Nt, Nz))
-#         if verbose > 0: print("FDM Sol time  : {:.3f} s".format(time()-t00))
-#         #############
-#
-#     # Report running time.
-#     if verbose > 0:
-#         runtime_tot = time() - t00_tot
-#         aux = [runtime_tot, Nt, Nz, Nt*Nz]
-#         mes = "FDM block time: {:.3f} s for a grid of {} x {} = {} points."
-#         print(mes.format(*aux))
-#     # Plotting.
-#     if plots:
-#         plt.figure(figsize=(15, 8))
-#         plt.subplot(1, 2, 1)
-#         plt.title("$B$ numeric")
-#         cs = plt.pcolormesh(Z*100, tau*1e9, np.abs(B), shading="auto")
-#         plt.colorbar(cs)
-#         plt.ylabel(r"$\tau$ (ns)")
-#         plt.xlabel("$Z$ (cm)")
-#
-#         plt.subplot(1, 2, 2)
-#         plt.title("$S$ numeric")
-#         cs = plt.pcolormesh(Z*100, tau*1e9, np.abs(S), shading="auto")
-#         plt.colorbar(cs)
-#         plt.ylabel(r"$\tau$ (ns)")
-#         plt.xlabel("$Z$ (cm)")
-#         aux = folder+"solution_numeric"+name+".png"
-#         plt.savefig(aux, bbox_inches="tight")
-#         plt.close("all")
-#
-#     if P0z is not None:
-#         return P, B, S
-#     else:
-#         return B, S
-#
-#
-# def solve(params, S0t=None, S0z=None, B0z=None, P0z=None, Omegat="square",
-#           method=0, pt=4, pz=4,
-#           folder="", name="", plots=False, verbose=0,
-#           seed=None, analytic_storage=True, return_modes=False):
-#     r"""We solve using the finite difference method for given
-#     boundary conditions, and with time and space precisions `pt` and `pz`.
-#     """
-#     adiabatic = P0z is None
-#     t00f = time()
-#     # We unpack parameters.
-#     if True:
-#         aux = build_mesh_fdm(params)
-#         params, Z, tau, tau1, tau2, tau3 = aux
-#         Nt = params["Nt"]
-#         Nz = params["Nz"]
-#         kappa = calculate_kappa(params)
-#         Gamma21 = calculate_Gamma21(params)
-#         Gamma32 = calculate_Gamma32(params)
-#         # Omega = calculate_Omega(params)
-#         taus = params["taus"]
-#         t0s = params["t0s"]
-#         L = Z[-1] - Z[0]
-#
-#         Nt1 = tau1.shape[0]
-#         Nt2 = tau2.shape[0]
-#         Nt3 = tau3.shape[0]
-#
-#         # We initialize the solution.
-#         if not adiabatic:
-#             P = np.zeros((Nt, Nz), complex)
-#         B = np.zeros((Nt, Nz), complex)
-#         S = np.zeros((Nt, Nz), complex)
-#     # We solve in the initial region.
-#     if True:
-#         if verbose > 0: t000f = time()
-#         B_exact1 = np.zeros((Nt1, Nz))
-#         S_exact1 = np.zeros((Nt1, Nz))
-#         ttau1 = np.outer(tau1, np.ones(Nz))
-#         ZZ1 = np.outer(np.ones(Nt1), Z)
-#
-#         nshg = params["nshg"]
-#         if seed == "S":
-#             sigs = taus/(2*np.sqrt(2*np.log(2)))*np.sqrt(2)
-#             S_exact1 = hermite_gauss(nshg, -t0s + ttau1 - 2*ZZ1/c, sigs)
-#             S_exact1 = S_exact1*np.exp(-(ZZ1+L/2)*kappa**2/Gamma21)
-#             S[:Nt1, :] = S_exact1
-#         elif seed == "B":
-#             nshg = nshg + 1
-#             B_exact1 = harmonic(nshg, ZZ1, L)
-#             B[:Nt1, :] = B_exact1
-#         elif S0t is not None or S0z is not None or B0z is not None:
-#             if S0t is not None:
-#                 S0t_interp = interpolator(tau, S0t, kind="cubic")
-#                 S_exact1 = S0t_interp(ttau1 - 2*(ZZ1+L/2)/c)
-#                 S_exact1 = S_exact1*np.exp(-(ZZ1+L/2)*kappa**2/Gamma21)
-#                 S[:Nt1, 1:] += S_exact1[:, 1:]
-#                 S[:, 0] = S0t
-#             if S0z is not None:
-#                 t00 = params["t0w"] - params["tauw"]/2
-#                 S0z_interp = interpolator(Z, S0z, kind="cubic")
-#                 S_exact2 = S0z_interp(ZZ1-c/2*(ttau1-tau1[0]))
-#                 S_exact2 *= np.exp(-c*kappa**2*(ttau1-t00)/(2*Gamma21))
-#
-#                 S[:Nt1, 1:] += S_exact2[:, 1:]
-#                 S[0, :] = S0z
-#
-#             if B0z is not None:
-#                 B_exact1 = np.outer(np.ones(Nt1), B0z)
-#                 B[:Nt1, :] = B_exact1
-#         else:
-#             mes = "Either of S0t, B0z, or seed must be given as arguments"
-#             raise ValueError(mes)
-#         if verbose > 0: print("region 1 time : {:.3f} s".format(time()-t000f))
-#     # We obtain the input modes for the memory region.
-#     if True:
-#         if S0t is None and B0z is None:
-#             if seed == "P":
-#                 # We seed with a harmonic mode.
-#                 raise NotImplementedError
-#             elif seed == "B":
-#                 # We seed with a harmonic mode.
-#                 B02z = harmonic(nshg, Z, L)
-#                 S02z = np.zeros(Nz, complex)
-#                 S02t = np.zeros(Nt2, complex)
-#             elif seed == "S":
-#                 # We seed with a Hermite-Gauss mode.
-#                 # HG modes propagate as:
-#                 #  S(tau, Z) = HG_n(t-t0s - 2*Z/c, sigma)
-#                 #            x exp(-(Z+D/2)*kappa**2/Gamma21)
-#                 #
-#                 # We calculate the gaussian standard deviation.
-#                 B02z = np.zeros(Nz, complex)
-#                 S02z = hermite_gauss(nshg, tau2[0] - t0s - 2*Z/c, sigs)
-#                 S02z = S02z*np.exp(-(Z+L/2)*kappa**2/Gamma21)
-#                 S02t = hermite_gauss(nshg, tau2 - t0s + L/c, sigs)
-#             else:
-#                 raise ValueError
-#         else:
-#             if S0t is not None:
-#                 B02z = B_exact1[Nt1-1, :]
-#                 S02z = S_exact1[Nt1-1, :]
-#                 S02t = S0t[Nt1-1:Nt1+Nt2-1]
-#             if B0z is not None:
-#                 B02z = B0z
-#                 S02z = np.zeros(Nz, complex)
-#                 S02t = np.zeros(Nt2, complex)
-#     # We solve in the memory region using the FDM.
-#     if True:
-#         if verbose > 0: t000f = time()
-#         params_memory = params.copy()
-#         params_memory["Nt"] = Nt2
-#
-#         aux1 = [params_memory, S02t, S02z, B02z, tau2, Z]
-#         aux2 = {"Omegat": Omegat, "method": method, "pt": pt, "pz": pz,
-#                 "folder": folder, "plots": False,
-#                 "verbose": verbose-1, "P0z": P0z, "case": 2}
-#         if adiabatic:
-#             B2, S2 = solve_fdm_block(*aux1, **aux2)
-#             B[Nt1-1:Nt1+Nt2-1] = B2
-#             S[Nt1-1:Nt1+Nt2-1] = S2
-#         else:
-#             P2, B2, S2 = solve_fdm_block(*aux1, **aux2)
-#             P[Nt1-1:Nt1+Nt2-1] = P2
-#             B[Nt1-1:Nt1+Nt2-1] = B2
-#             S[Nt1-1:Nt1+Nt2-1] = S2
-#
-#         if verbose > 0: print("region 2 time : {:.3f} s".format(time()-t000f))
-#     # We solve in the storage region.
-#     if True:
-#         if verbose > 0: t000f = time()
-#         B03z = B[Nt1+Nt2-2, :]
-#         S03z = S[Nt1+Nt2-2, :]
-#         if seed == "S":
-#             S03t = hermite_gauss(nshg, tau3 - t0s + L/c, sigs)
-#         elif S0t is not None:
-#             S03t = S0t[Nt1+Nt2-2:]
-#         else:
-#             S03t = np.zeros(Nt3, complex)
-#
-#         params_storage = params.copy()
-#         params_storage["Nt"] = Nt3
-#         aux1 = [params_storage, S03t, S03z, B03z, tau3, Z]
-#         aux2 = {"pt": pt, "pz": pz, "folder": folder, "plots": False,
-#                 "verbose": 1, "P0z": P0z, "case": 1}
-#
-#         # We calculate analyticaly.
-#         if adiabatic:
-#             if analytic_storage > 0:
-#                 t03 = tau3[0]
-#                 ttau3 = np.outer(tau3, np.ones(Nz))
-#                 ZZ3 = np.outer(np.ones(Nt3), Z)
-#
-#                 B[Nt1+Nt2-2:] = B03z*np.exp(-Gamma32*(ttau3 - t03))
-#
-#                 # The region determined by S03z
-#
-#                 S03z_reg = np.where(ttau3 <= t03 + (2*ZZ3+L)/c, 1.0, 0.0)
-#                 # The region determined by S03t
-#                 S03t_reg = 1 - S03z_reg
-#                 S03z_f = interpolator(Z, S03z, kind="cubic")
-#                 S03t_f = interpolator(tau3, S03t, kind="cubic")
-#
-#             if analytic_storage == 1:
-#                 S03z_reg = S03z_reg*S03z_f(ZZ3 - (ttau3-t03)*c/2)
-#                 S03z_reg = S03z_reg*np.exp(-c*kappa**2/2/Gamma21*(ttau3-t03))
-#
-#                 S03t_reg = S03t_reg*S03t_f(ttau3 - (2*ZZ3+L)/c)
-#                 S03t_reg = S03t_reg*np.exp(-kappa**2/Gamma21*(ZZ3+L/2))
-#                 S3 = S03z_reg + S03t_reg
-#                 S[Nt1+Nt2-2:] = S3
-#             elif analytic_storage == 2:
-#                 aux1 = S03z_f(L/2 - (tau3-t03)*c/2)
-#                 aux1 = aux1*np.exp(-c*kappa**2/2/Gamma21*(tau3-t03))
-#
-#                 aux2 = S03t_f(tau3 - (2*L/2+L)/c)
-#                 aux2 = aux2*np.exp(-kappa**2/Gamma21*(L/2+L/2))
-#
-#                 Sf3t = S03z_reg[:, -1]*aux1 + S03t_reg[:, -1]*aux2
-#                 S[Nt1+Nt2-2:, -1] = Sf3t
-#
-#                 tff = tau3[-1]
-#                 aux3 = S03z_f(Z - (tff-t03)*c/2)
-#                 aux3 = aux3*np.exp(-c*kappa**2/2/Gamma21*(tff-t03))
-#
-#                 aux4 = S03t_f(tff - (2*Z+L)/c)
-#                 aux4 = aux4*np.exp(-kappa**2/Gamma21*(Z+L/2))
-#
-#                 Sf3z = S03z_reg[-1, :]*aux3 + S03t_reg[-1, :]*aux4
-#                 S[-1, :] = Sf3z
-#                 S[Nt1+Nt2-2:, 0] = S03t
-#
-#             elif analytic_storage == 0:
-#                 B3, S3 = solve_fdm_block(*aux1, **aux2)
-#                 B[Nt1+Nt2-2:] = B3
-#                 S[Nt1+Nt2-2:] = S3
-#             else:
-#                 raise ValueError
-#         else:
-#             P3, B3, S3 = solve_fdm_block(*aux1, **aux2)
-#             P[Nt1+Nt2-2:] = P3
-#             B[Nt1+Nt2-2:] = B3
-#             S[Nt1+Nt2-2:] = S3
-#
-#         if verbose > 0: print("region 3 time : {:.3f} s".format(time()-t000f))
-#     if verbose > 0:
-#         print("Full exec time: {:.3f} s".format(time()-t00f))
-#     # Plotting.
-#     if plots:
-#         fs = 15
-#         if verbose > 0: print("Plotting...")
-#
-#         fig, ax1 = plt.subplots()
-#         ax2 = ax1.twinx()
-#         ax1.plot(tau*1e9, np.abs(S[:, 0])**2*1e-9, "b-")
-#         ax1.plot(tau*1e9, np.abs(S[:, -1])**2*1e-9, "g-")
-#
-#         angle1 = np.unwrap(np.angle(S[:, -1]))/2/np.pi
-#         ax2.plot(tau*1e9, angle1, "g:")
-#
-#         ax1.set_xlabel(r"$\tau \ [ns]$", fontsize=fs)
-#         ax1.set_ylabel(r"Signal  [1/ns]", fontsize=fs)
-#         ax2.set_ylabel(r"Phase  [revolutions]", fontsize=fs)
-#         plt.savefig(folder+"Sft_"+name+".png", bbox_inches="tight")
-#         plt.close()
-#
-#         plt.figure(figsize=(15, 9))
-#         plt.subplot(1, 2, 1)
-#         plt.title("$B$ FDM")
-#         cs = plt.pcolormesh(Z*100, tau*1e9, np.abs(B)**2, shading="auto")
-#         plt.colorbar(cs)
-#         plt.ylabel(r"$\tau$ (ns)")
-#         plt.xlabel("$Z$ (cm)")
-#
-#         plt.subplot(1, 2, 2)
-#         plt.title("$S$ FDM")
-#         cs = plt.pcolormesh(Z*100, tau*1e9, np.abs(S)**2*1e-9, shading="auto")
-#         plt.colorbar(cs)
-#         plt.ylabel(r"$\tau$ (ns)")
-#         plt.xlabel("$Z$ (cm)")
-#
-#         plt.savefig(folder+"solution_fdm_"+name+".png", bbox_inches="tight")
-#         plt.close("all")
-#
-#     if adiabatic:
-#         if return_modes:
-#             B0 = B02z
-#             S0 = S[:, 0]
-#             B1 = B03z
-#             S1 = S[:, -1]
-#             return tau, Z, B0, S0, B1, S1
-#         else:
-#             return tau, Z, B, S
-#     else:
-#         return tau, Z, P, B, S
+
+def calculate_efficiencies(tau, Z, Bw, Sw, Br, Sr, verbose=0):
+    r"""Calculate the memory efficiencies for a given write-read
+    process.
+
+    These are the total memory efficiency, TB, RS, RB, TS.
+    """
+    L = Z[-1] - Z[0]
+    tau_iniS = tau[0]
+    tau_iniQ = tau_iniS - L*2/c
+    tauQ0 = (tau_iniS-tau_iniQ)/(Z[0]-Z[-1])*(Z-Z[0]) + tau_iniS
+
+    tau_finS = tau[-1]
+    tau_finQ = tau_finS + L*2/c
+    tauQf = (tau_finS-tau_finQ)/(Z[-1]-Z[0])*(Z-Z[-1]) + tau_finS
+
+    # The initial photon number.
+    NS = num_integral(np.abs(Sw[:, 0])**2, tau)
+    NS += num_integral(np.abs(Sw[0, :])**2, tauQ0)
+    # The transmitted photon number.
+    NST = num_integral(np.abs(Sw[:, -1])**2, tau)
+    NST += num_integral(np.abs(Sw[-1, :])**2, tauQf)
+    # The retrieved photon number.
+    Nf = num_integral(np.abs(Sr[:, -1])**2, tau)
+    Nf += num_integral(np.abs(Sr[-1, :])**2, tauQf)
+    # The initial spin-wave number.
+    NB = num_integral(np.abs(Br[0, :])**2, tau)
+    # The transmitted. spin-wave number.
+    NBT = num_integral(np.abs(Br[-1, :])**2, tau)
+
+    # Nt1 = tau1.shape[0]
+    # S0Z_num = Sw[Nt1-1, :]
+
+    TS = NST/NS
+    RS = 1 - TS
+
+    TB = NBT/NB
+    RB = 1 - TB
+
+    eta_num = Nf/NS
+
+    if verbose > 0:
+        print("Numerical efficiency      : {:.4f}".format(eta_num))
+        print("")
+        print("Beam-splitter picture transmissivities and reflectivities:")
+        print("TB: {:.4f}, RS: {:.4f}".format(TB, RS))
+        print("RB: {:.4f}, TS: {:.4f}".format(RB, TS))
+
+    return eta_num, TB, RS, RB, TS
+
+
+#############################################################################
+# Finite difference ORCA routines.
+
+
+def eqs_fdm(params, tau, Z, Omegat="square", case=0, adiabatic=True,
+            pt=4, pz=4, plots=False, folder="", sparse=False):
+    r"""Calculate the matrix form of equations `Wp X = 0`."""
+    if not adiabatic:
+        nv = 3
+    else:
+        nv = 2
+    # We unpack parameters.
+    if True:
+        with_focusing = params["with_focusing"]
+        Nt = tau.shape[0]
+        Nz = Z.shape[0]
+        Gamma21 = calculate_Gamma21(params)
+        Gamma32 = calculate_Gamma32(params)
+        kappa = calculate_kappa(params)
+        Omega0 = calculate_Xi(params)
+
+        g21 = calculate_g21(params)
+        g32Delta = calculate_g32Delta(params)
+        delta_stark = calculate_delta_stark(params)
+        delta_disp = calculate_delta_disp(params)
+        OmegaBS0 = calculate_OmegaBS(params)
+
+        tauw = params["tauw"]
+
+        nX = nv*Nt*Nz
+        Ntz = Nt*Nz
+    # We build the derivative matrices.
+    if True:
+        args = [tau, Z]
+        kwargs = {"pt": pt, "pz": pz, "plots": plots, "folder": folder,
+                  "sparse": sparse}
+        DT, DZ = fdm_derivative_operators(*args, **kwargs)
+
+    # We calculate Omega(tau, z) as an array, and then as a flattened,
+    # diagonal matrix.
+    w0Xi = params["w2"]
+    zRS, zRXi = rayleigh_range(params)
+    wXi = w0Xi*np.sqrt(1 + (Z/zRXi)**2)
+
+    if with_focusing:
+        Omegaz = Omega0*w0Xi/wXi
+        OmegaBSz = OmegaBS0*w0Xi/wXi
+    else:
+        Omegaz = Omega0*np.ones(Nz)
+        OmegaBSz = OmegaBS0*np.ones(Nz)
+
+    if Omegat == "square":
+        Omegatauz = np.outer(np.ones(Nt), Omegaz).flatten()
+        OmegaBStauz = np.outer(np.ones(Nt), OmegaBSz).flatten()
+    elif with_focusing:
+        Omegatauz = Omega0*np.sqrt(tauw)
+        Omegatauz *= np.outer(Omegat(tau), w0Xi/wXi).flatten()
+
+        raise NotImplementedError
+        # It should be something like this:
+        # OmegaBStauz = OmegaBS0*np.sqrt(tauw)
+        # OmegaBStauz *= np.outer(OmegaBSt(tau), w0Xi/wXi).flatten()
+    else:
+        Omegatauz = Omega0*np.sqrt(tauw)
+        Omegatauz *= np.outer(Omegat(tau), np.ones(Nz)).flatten()
+
+        raise NotImplementedError
+        # It should be something like this:
+        # OmegaBStauz = OmegaBS0*np.sqrt(tauw)
+        # OmegaBStauz *= np.outer(OmegaBSt(tau), np.ones(Nz)).flatten()
+
+    if sparse:
+        eye = sp_eye(Ntz, format=bfmt)
+        A = bfmtf((nX, nX), dtype=np.complex128)
+        Omega = spdiags(Omegatauz, [0], Ntz, Ntz, format=bfmt)
+
+        OmegaBS = spdiags(OmegaBStauz, [0], Ntz, Ntz, format=bfmt)
+    else:
+        eye = np.eye(Ntz)
+        A = np.zeros((nX, nX), complex)
+        Omega = np.diag(Omegatauz)
+
+        OmegaBS = np.diag(OmegaBStauz)
+
+    # We build the A matrix.
+    if True:
+        # Empty space.
+        if case == 0 and adiabatic:
+            # We set the time derivatives.
+            A = set_block(A, 0, 0, DT)
+            A = set_block(A, 1, 1, DT)
+
+            # We set the right-hand side terms.
+            A = set_block(A, 0, 0, -1j*g32Delta*eye)
+            A = set_block(A, 1, 1, c/2*DZ)
+        # Storage phase.
+        elif case == 1 and adiabatic:
+            # We set the time derivatives.
+            A = set_block(A, 0, 0, DT)
+            A = set_block(A, 1, 1, DT)
+
+            # We set the right-hand side terms.
+            A = set_block(A, 0, 0, -1j*g32Delta*eye)
+            A = set_block(A, 1, 1, c/2*DZ)
+            A = set_block(A, 1, 1, 1j*delta_disp*g21*eye)
+
+        # Memory write/read phase.
+        elif case == 2 and adiabatic:
+            # We set the time derivatives.
+            A = set_block(A, 0, 0, DT)
+            A = set_block(A, 1, 1, DT)
+
+            # We set the right-hand side terms.
+            A = set_block(A, 0, 0, -1j*(g32Delta + g21*delta_stark)*eye)
+            A = set_block(A, 1, 1, c/2*DZ)
+            A = set_block(A, 1, 1, 1j*delta_disp*g21*eye)
+
+            A = set_block(A, 1, 0, 1j*g21*np.conjugate(OmegaBS)/2*eye)
+            A = set_block(A, 0, 1, 1j*g21*OmegaBS/2*eye)
+
+            # # We set the right-hand side terms.
+            # A = set_block(A, 0, 0, Gamma32*eye)
+            # A = set_block(A, 1, 1, c*kappa**2/2/Gamma21*eye)
+            # A = set_block(A, 1, 1, c/2*DZ)
+            #
+            # aux1 = np.abs(Omega)**2/Gamma21
+            # aux2 = kappa*Omega/Gamma21
+            # aux3 = c*kappa*np.conjugate(Omega)/2/Gamma21
+            #
+            # A = set_block(A, 0, 0, aux1)
+            # A = set_block(A, 0, 1, aux2)
+            # A = set_block(A, 1, 0, aux3)
+
+        elif case == 0 and not adiabatic:
+            # We set the time derivatives.
+            A = set_block(A, 0, 0, DT)
+            A = set_block(A, 1, 1, DT)
+            A = set_block(A, 2, 2, DT)
+
+            # We set the right-hand side terms.
+            A = set_block(A, 0, 0, Gamma21*eye)
+            A = set_block(A, 1, 1, Gamma32*eye)
+            A = set_block(A, 2, 2, c/2*DZ)
+
+        elif case == 1 and not adiabatic:
+            # We set the time derivatives.
+            A = set_block(A, 0, 0, DT)
+            A = set_block(A, 1, 1, DT)
+            A = set_block(A, 2, 2, DT)
+
+            # We set the right-hand side terms.
+            A = set_block(A, 0, 0, Gamma21*eye)
+            A = set_block(A, 1, 1, Gamma32*eye)
+            A = set_block(A, 2, 2, c/2*DZ)
+            A = set_block(A, 0, 2, 1j*kappa*eye)
+            A = set_block(A, 2, 0, 1j*kappa*c/2*eye)
+        elif case == 2 and not adiabatic:
+            # We set the time derivatives.
+            A = set_block(A, 0, 0, DT)
+            A = set_block(A, 1, 1, DT)
+            A = set_block(A, 2, 2, DT)
+
+            # We set the right-hand side terms.
+            A = set_block(A, 0, 0, Gamma21*eye)
+            A = set_block(A, 1, 1, Gamma32*eye)
+            A = set_block(A, 2, 2, c/2*DZ)
+            A = set_block(A, 0, 2, 1j*kappa*eye)
+            A = set_block(A, 2, 0, 1j*kappa*c/2*eye)
+
+            A = set_block(A, 0, 1, 1j*np.conjugate(Omega))
+            A = set_block(A, 1, 0, 1j*Omega)
+
+    if plots:
+        ################################################################
+        # Plotting Wp.
+        plt.figure(figsize=(15, 15))
+        plt.title("$A'$")
+        plt.imshow(np.log(np.abs(A)))
+        plt.savefig(folder+"A.png", bbox_inches="tight")
+        plt.close("all")
+
+    return A
+
+
+def solve_fdm_block(params, S0t, S0z, B0z, tau, Z, P0z=None, Omegat="square",
+                    case=0, method=0, pt=4, pz=4,
+                    plots=False, folder="", name="", verbose=0):
+    r"""We solve using the finite difference method for given
+    boundary conditions, and with time and space precisions `pt` and `pz`.
+
+    INPUT:
+
+    -  ``params`` - dict, the problem's parameters.
+
+    -  ``S0t`` - array, the S(Z=-L/2, t) boundary condition.
+
+    -  ``S0z`` - array, the S(Z, t=0) boundary condition.
+
+    -  ``B0z`` - array, the B(Z, t=0) boundary condition.
+
+    -  ``tau`` - array, the time axis.
+
+    -  ``Z`` - array, the space axis.
+
+    -  ``P0z`` - array, the P(Z, t=0) boundary condition (default None).
+
+    -  ``Omegat`` - function, a function that returns the temporal mode of the
+                    Rabi frequency at time tau (default "square").
+
+    -  ``case`` - int, the dynamics to solve for: 0 for free space, 1 for
+                  propagation through vapour, 2 for propagation through vapour
+                  and non-zero control field.
+
+    -  ``method`` - int, the fdm method to use: 0 to solve the full space, 1
+                  to solve by time step slices.
+
+    -  ``pt`` - int, the precision order for the numerical time derivate. Must
+                be even.
+
+    -  ``pz`` - int, the precision order for the numerical space derivate. Must
+                be even.
+
+    -  ``plots`` - bool, whether to make plots.
+
+    -  ``folder`` - str, the directory to save plots in.
+
+    -  ``verbose`` - int, a vague measure much of messages to print.
+
+    OUTPUT:
+
+    A solution to the equations for the given case and boundary conditions.
+
+    """
+    t00_tot = time()
+    # We unpack parameters.
+    if True:
+        Nt = params["Nt"]
+        Nz = params["Nz"]
+        # Nt_prop = pt + 1
+
+        # The number of functions.
+        nv = 2
+    # We make pre-calculations.
+    if True:
+        if P0z is not None:
+            P = np.zeros((Nt, Nz), complex)
+            P[0, :] = P0z
+        B = np.zeros((Nt, Nz), complex)
+        S = np.zeros((Nt, Nz), complex)
+        B[0, :] = B0z
+        S[0, :] = S0z
+    if method == 0:
+        # We solve the full block.
+        sparse = True
+        aux1 = [params, tau, Z]
+        aux2 = {"Omegat": Omegat, "pt": pt, "pz": pz, "case": case,
+                "folder": folder, "plots": False, "sparse": sparse,
+                "adiabatic": P0z is None}
+        # print(Omegat)
+        t00 = time()
+        A = eqs_fdm(*aux1, **aux2)
+        if verbose > 0: print("FDM Eqs time  : {:.3f} s".format(time()-t00))
+        #############
+        # New method.
+        # We get the input indices.
+        t00 = time()
+        auxi = np.arange(nv*Nt*Nz).reshape((nv, Nt, Nz))
+        indsB0 = auxi[0, 0, :].tolist()
+        indsQ0 = np.flip(auxi[1, 0, :]).tolist()
+        indsS0 = auxi[1, :, 0].tolist()
+        inds0_ = indsB0 + indsQ0 + indsS0
+
+        indsBf = auxi[0, -1, :].tolist()
+        indsSf = auxi[1, :, -1].tolist()
+        indsQf = np.flip(auxi[1, -1, :]).tolist()
+        indsf_ = indsBf + indsSf + indsQf
+        indsf_ = auxi.flatten().tolist()
+
+        # We build the input vector.
+        input = np.zeros((len(inds0_), 1), complex)
+        input[:Nz, 0] = B0z
+        input[Nz:2*Nz, 0] = np.flip(S0z)
+        input[2*Nz:, 0] = S0t
+
+        Y = solve_fdm(A, inds0_, indsf_, input=input)
+        B, S = np.reshape(Y, (nv, Nt, Nz))
+        if verbose > 0: print("FDM Sol time  : {:.3f} s".format(time()-t00))
+        #############
+
+    # Report running time.
+    if verbose > 0:
+        runtime_tot = time() - t00_tot
+        aux = [runtime_tot, Nt, Nz, Nt*Nz]
+        mes = "FDM block time: {:.3f} s for a grid of {} x {} = {} points."
+        print(mes.format(*aux))
+    # Plotting.
+    if plots:
+        plt.figure(figsize=(15, 8))
+        plt.subplot(1, 2, 1)
+        plt.title("$B$ numeric")
+        cs = plt.pcolormesh(Z*100, tau*1e9, np.abs(B), shading="auto")
+        plt.colorbar(cs)
+        plt.ylabel(r"$\tau$ (ns)")
+        plt.xlabel("$Z$ (cm)")
+
+        plt.subplot(1, 2, 2)
+        plt.title("$S$ numeric")
+        cs = plt.pcolormesh(Z*100, tau*1e9, np.abs(S), shading="auto")
+        plt.colorbar(cs)
+        plt.ylabel(r"$\tau$ (ns)")
+        plt.xlabel("$Z$ (cm)")
+        aux = folder+"solution_numeric"+name+".png"
+        plt.savefig(aux, bbox_inches="tight")
+        plt.close("all")
+
+    if P0z is not None:
+        return P, B, S
+    else:
+        return B, S
+
+
+def solve(params, S0t=None, S0z=None, B0z=None, P0z=None, Omegat="square",
+          method=0, pt=4, pz=4,
+          folder="", name="", plots=False, verbose=0,
+          seed=None, analytic_storage=True, return_modes=False):
+    r"""We solve using the finite difference method for given
+    boundary conditions, and with time and space precisions `pt` and `pz`.
+    """
+    adiabatic = P0z is None
+    t00f = time()
+    # We unpack parameters.
+    if True:
+        aux = build_mesh_fdm(params)
+        params, Z, tau, tau1, tau2, tau3 = aux
+        Nt = params["Nt"]
+        Nz = params["Nz"]
+        kappa = calculate_kappa(params)
+        Gamma21 = calculate_Gamma21(params)
+        Gamma32 = calculate_Gamma32(params)
+
+        delta_disp = calculate_delta_disp(params)
+        g21 = calculate_g21(params)
+        # Omega = calculate_Omega(params)
+        taus = params["taus"]
+        t0s = params["t0s"]
+        L = Z[-1] - Z[0]
+
+        Nt1 = tau1.shape[0]
+        Nt2 = tau2.shape[0]
+        Nt3 = tau3.shape[0]
+
+        # We initialize the solution.
+        if not adiabatic:
+            P = np.zeros((Nt, Nz), complex)
+        B = np.zeros((Nt, Nz), complex)
+        S = np.zeros((Nt, Nz), complex)
+    # We solve in the initial region.
+    if True:
+        if verbose > 0: t000f = time()
+        B_exact1 = np.zeros((Nt1, Nz))
+        S_exact1 = np.zeros((Nt1, Nz))
+        ttau1 = np.outer(tau1, np.ones(Nz))
+        ZZ1 = np.outer(np.ones(Nt1), Z)
+
+        nshg = params["nshg"]
+        if seed == "S":
+            sigs = taus/(2*np.sqrt(2*np.log(2)))*np.sqrt(2)
+            S_exact1 = hermite_gauss(nshg, -t0s + ttau1 - 2*ZZ1/c, sigs)
+            S_exact1 = S_exact1*np.exp(-(ZZ1+L/2)*kappa**2/Gamma21)
+            S[:Nt1, :] = S_exact1
+        elif seed == "B":
+            nshg = nshg + 1
+            B_exact1 = harmonic(nshg, ZZ1, L)
+            B[:Nt1, :] = B_exact1
+        elif S0t is not None or S0z is not None or B0z is not None:
+            # These solutions come from the Other analytic solutions appendix.
+
+            if S0t is not None:
+                S0t_interp = interpolator(tau, S0t, kind="cubic")
+                S_exact1 = S0t_interp(ttau1 - 2*(ZZ1+L/2)/c)
+                S_exact1 = S_exact1*np.exp(-(ZZ1+L/2)*2*1j*delta_disp*g21/c)
+                S[:Nt1, 1:] += S_exact1[:, 1:]
+                S[:, 0] = S0t
+            if S0z is not None:
+                t00 = params["t0w"] - params["tauw"]/2
+                S0z_interp = interpolator(Z, S0z, kind="cubic")
+                S_exact2 = S0z_interp(ZZ1-c/2*(ttau1-tau1[0]))
+                S_exact2 *= np.exp(-(ttau1-t00)*1j*delta_disp*g21)
+
+                S[:Nt1, 1:] += S_exact2[:, 1:]
+                S[0, :] = S0z
+
+            # This should have an exponential decay, but it is convenient to
+            # leave it as this to avoid complications with Green's functions.
+            if B0z is not None:
+                B_exact1 = np.outer(np.ones(Nt1), B0z)
+                B[:Nt1, :] = B_exact1
+        else:
+            mes = "Either of S0t, B0z, or seed must be given as arguments"
+            raise ValueError(mes)
+        if verbose > 0: print("region 1 time : {:.3f} s".format(time()-t000f))
+    # We obtain the input modes for the memory region.
+    if True:
+        if S0t is None and B0z is None:
+            if seed == "P":
+                # We seed with a harmonic mode.
+                raise NotImplementedError
+            elif seed == "B":
+                # We seed with a harmonic mode.
+                B02z = harmonic(nshg, Z, L)
+                S02z = np.zeros(Nz, complex)
+                S02t = np.zeros(Nt2, complex)
+            elif seed == "S":
+                # We seed with a Hermite-Gauss mode.
+                # HG modes propagate as:
+                #  S(tau, Z) = HG_n(t-t0s - 2*Z/c, sigma)
+                #            x exp(-(Z+D/2)*kappa**2/Gamma21)
+                #
+                # We calculate the gaussian standard deviation.
+                B02z = np.zeros(Nz, complex)
+                S02z = hermite_gauss(nshg, tau2[0] - t0s - 2*Z/c, sigs)
+                S02z = S02z*np.exp(-(Z+L/2)*kappa**2/Gamma21)
+                S02t = hermite_gauss(nshg, tau2 - t0s + L/c, sigs)
+            else:
+                raise ValueError
+        else:
+            if S0t is not None:
+                B02z = B_exact1[Nt1-1, :]
+                S02z = S_exact1[Nt1-1, :]
+                S02t = S0t[Nt1-1:Nt1+Nt2-1]
+            if B0z is not None:
+                B02z = B0z
+                S02z = np.zeros(Nz, complex)
+                S02t = np.zeros(Nt2, complex)
+    # We solve in the memory region using the FDM.
+    if True:
+        if verbose > 0: t000f = time()
+        params_memory = params.copy()
+        params_memory["Nt"] = Nt2
+
+        aux1 = [params_memory, S02t, S02z, B02z, tau2, Z]
+        aux2 = {"Omegat": Omegat, "method": method, "pt": pt, "pz": pz,
+                "folder": folder, "plots": False,
+                "verbose": verbose-1, "P0z": P0z, "case": 2}
+        if adiabatic:
+            B2, S2 = solve_fdm_block(*aux1, **aux2)
+            B[Nt1-1:Nt1+Nt2-1] = B2
+            S[Nt1-1:Nt1+Nt2-1] = S2
+        else:
+            P2, B2, S2 = solve_fdm_block(*aux1, **aux2)
+            P[Nt1-1:Nt1+Nt2-1] = P2
+            B[Nt1-1:Nt1+Nt2-1] = B2
+            S[Nt1-1:Nt1+Nt2-1] = S2
+
+        if verbose > 0: print("region 2 time : {:.3f} s".format(time()-t000f))
+    # We solve in the storage region.
+    if True:
+        if verbose > 0: t000f = time()
+        B03z = B[Nt1+Nt2-2, :]
+        S03z = S[Nt1+Nt2-2, :]
+        if seed == "S":
+            S03t = hermite_gauss(nshg, tau3 - t0s + L/c, sigs)
+        elif S0t is not None:
+            S03t = S0t[Nt1+Nt2-2:]
+        else:
+            S03t = np.zeros(Nt3, complex)
+
+        params_storage = params.copy()
+        params_storage["Nt"] = Nt3
+        aux1 = [params_storage, S03t, S03z, B03z, tau3, Z]
+        aux2 = {"pt": pt, "pz": pz, "folder": folder, "plots": False,
+                "verbose": 1, "P0z": P0z, "case": 1}
+
+        # We calculate analyticaly.
+        if adiabatic:
+            if analytic_storage > 0:
+                t03 = tau3[0]
+                ttau3 = np.outer(tau3, np.ones(Nz))
+                ZZ3 = np.outer(np.ones(Nt3), Z)
+
+                B[Nt1+Nt2-2:] = B03z*np.exp(-Gamma32*(ttau3 - t03))
+
+                # The region determined by S03z
+
+                S03z_reg = np.where(ttau3 <= t03 + (2*ZZ3+L)/c, 1.0, 0.0)
+                # The region determined by S03t
+                S03t_reg = 1 - S03z_reg
+                S03z_f = interpolator(Z, S03z, kind="cubic")
+                S03t_f = interpolator(tau3, S03t, kind="cubic")
+
+            if analytic_storage == 1:
+                S03z_reg = S03z_reg*S03z_f(ZZ3 - (ttau3-t03)*c/2)
+                S03z_reg = S03z_reg*np.exp(-(ttau3-t03)*1j*delta_disp*g21)
+
+                S03t_reg = S03t_reg*S03t_f(ttau3 - (2*ZZ3+L)/c)
+                S03t_reg = S03t_reg*np.exp(-(ZZ3+L/2)*2j*delta_disp*g21/c)
+                S3 = S03z_reg + S03t_reg
+                S[Nt1+Nt2-2:] = S3
+            elif analytic_storage == 2:
+                aux1 = S03z_f(L/2 - (tau3-t03)*c/2)
+                aux1 = aux1*np.exp(-(tau3-t03)*1j*delta_disp*g21)
+
+                aux2 = S03t_f(tau3 - (2*L/2+L)/c)
+                aux2 = aux2*np.exp(-(L/2+L/2)*2j*delta_disp*g21/c)
+
+                Sf3t = S03z_reg[:, -1]*aux1 + S03t_reg[:, -1]*aux2
+                S[Nt1+Nt2-2:, -1] = Sf3t
+
+                tff = tau3[-1]
+                aux3 = S03z_f(Z - (tff-t03)*c/2)
+                aux3 = aux3*np.exp(-(tff-t03)*1j*delta_disp*g21)
+
+                aux4 = S03t_f(tff - (2*Z+L)/c)
+                aux4 = aux4*np.exp(-(Z+L/2)*2j*delta_disp*g21/c)
+
+                Sf3z = S03z_reg[-1, :]*aux3 + S03t_reg[-1, :]*aux4
+                S[-1, :] = Sf3z
+                S[Nt1+Nt2-2:, 0] = S03t
+
+            elif analytic_storage == 0:
+                B3, S3 = solve_fdm_block(*aux1, **aux2)
+                B[Nt1+Nt2-2:] = B3
+                S[Nt1+Nt2-2:] = S3
+            else:
+                raise ValueError
+        else:
+            P3, B3, S3 = solve_fdm_block(*aux1, **aux2)
+            P[Nt1+Nt2-2:] = P3
+            B[Nt1+Nt2-2:] = B3
+            S[Nt1+Nt2-2:] = S3
+
+        if verbose > 0: print("region 3 time : {:.3f} s".format(time()-t000f))
+    if verbose > 0:
+        print("Full exec time: {:.3f} s".format(time()-t00f))
+    # Plotting.
+    if plots:
+        fs = 15
+        if verbose > 0: print("Plotting...")
+
+        fig, ax1 = plt.subplots()
+        ax2 = ax1.twinx()
+        ax1.plot(tau*1e9, np.abs(S[:, 0])**2*1e-9, "b-")
+        ax1.plot(tau*1e9, np.abs(S[:, -1])**2*1e-9, "g-")
+
+        angle1 = np.unwrap(np.angle(S[:, -1]))/2/np.pi
+        ax2.plot(tau*1e9, angle1, "g:")
+
+        ax1.set_xlabel(r"$\tau \ [ns]$", fontsize=fs)
+        ax1.set_ylabel(r"Signal  [1/ns]", fontsize=fs)
+        ax2.set_ylabel(r"Phase  [revolutions]", fontsize=fs)
+        plt.savefig(folder+"Sft_"+name+".png", bbox_inches="tight")
+        plt.close()
+
+        plt.figure(figsize=(15, 9))
+        plt.subplot(1, 2, 1)
+        plt.title("$B$ FDM")
+        cs = plt.pcolormesh(Z*100, tau*1e9, np.abs(B)**2, shading="auto")
+        plt.colorbar(cs)
+        plt.ylabel(r"$\tau$ (ns)")
+        plt.xlabel("$Z$ (cm)")
+
+        plt.subplot(1, 2, 2)
+        plt.title("$S$ FDM")
+        cs = plt.pcolormesh(Z*100, tau*1e9, np.abs(S)**2*1e-9, shading="auto")
+        plt.colorbar(cs)
+        plt.ylabel(r"$\tau$ (ns)")
+        plt.xlabel("$Z$ (cm)")
+
+        plt.savefig(folder+"solution_fdm_"+name+".png", bbox_inches="tight")
+        plt.close("all")
+
+    if adiabatic:
+        if return_modes:
+            B0 = B02z
+            S0 = S[:, 0]
+            B1 = B03z
+            S1 = S[:, -1]
+            return tau, Z, B0, S0, B1, S1
+        else:
+            return tau, Z, B, S
+    else:
+        return tau, Z, P, B, S
 #
 #
 # def check_block_fdm(params, B, S, tau, Z, case=0, P=None,
