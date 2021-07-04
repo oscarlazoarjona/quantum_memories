@@ -38,7 +38,7 @@ calculate = True
 # Set the memory parameters.
 if True:
     # The cell to control pulse ratio:
-    l = 1.6
+    f = 2.0; l = 1.6*f
     # The cell to control pulse ratio at half light-speed.
     lp = 2*l
     tauw = 300e-12
@@ -55,7 +55,7 @@ if True:
 
     params = {"verbose": 1,
               "nshg": 0, "USE_HG_SIG": True,
-              "sigma_power1": sigma_power1,
+              "sigma_power1": sigma_power1/f,
               "sigma_power2": sigma_power2,
               "Temperature": 273.15 + 115,
               "L": D/1.05,
@@ -127,24 +127,34 @@ if calculate:
     tau, Z, Br, Sr = solve(params, **kwargs)
 # We calculate the Beam-splitter picture transmissivities and reflectivities.
 if calculate:
-    NS = num_integral(np.abs(Sw[:, 0])**2, tau)
-    NST = num_integral(np.abs(Sw[:, -1])**2, tau)
-
     Nt1 = tau1.shape[0]
     S0Z_num = Sw[Nt1-1, :]
 
-    TS = NST/NS
-    RS = 1 - TS
+    NS = num_integral(np.abs(Sw[:, 0])**2, tau)
+    NST = num_integral(np.abs(Sw[:, -1])**2, tau)
+    NSR = num_integral(2/c*np.abs(Bw[-1, :])**2, Z)
 
-    NB = num_integral(np.abs(Br[0, :])**2, tau)
-    NBT = num_integral(np.abs(Br[-1, :])**2, tau)
+    NB = num_integral(2/c*np.abs(Br[0, :])**2, Z)
+    NBT = num_integral(2/c*np.abs(Br[-1, :])**2, Z)
+    NBR = num_integral(np.abs(Sr[:, -1])**2, tau)
+
+    TS = NST/NS
+    RS = NSR/NS
     TB = NBT/NB
-    RB = 1 - TB
+    RB = NBR/NB
+
+    # RB_naive = 1 - TB
+    # RS_naive = 1 - TS
+    # print(RS, RS_naive)
+    # print(RB, RB_naive)
 
     Nf = num_integral(np.abs(Sr[:, -1])**2, tau)
     eta_num = Nf/NS
+    eta_teo = RS*RB
+    assert np.allclose(eta_num, eta_teo)
 
     print("Numerical efficiency      : {:.4f}".format(eta_num))
+    print("Theorical efficiency      : {:.4f}".format(eta_teo))
     print("")
     print("Beam-splitter picture transmissivities and reflectivities:")
     print("TB: {:.4f}, RS: {:.4f}".format(TB, RS))
@@ -180,12 +190,12 @@ if calculate and plots:
     ax1.set_xlabel(r"$\tau \ [ns]$", fontsize=fs)
     ax1.set_ylabel(r"$|S|^2$  [1/ns]", fontsize=fs)
     ax2.set_ylabel(r"Phase  [revolutions]", fontsize=fs)
-    ax1.legend(loc=0, fontsize=fs)
+    ax1.legend(loc=0, fontsize=fs-5)
 
     ax[1].plot(Z*100, np.abs(Bw[0, :])**2 * 2/c*1e-2, "b-", label="Input")
     ax[1].plot(Z*100, np.abs(Bw[-1, :])**2 * 2/c*1e-2, "g-", label="Storage")
     ax[1].plot(Z*100, np.abs(Br[-1, :])**2 * 2/c*1e-2, "r-", label="Leakage")
-    ax[1].legend(loc=0, fontsize=fs)
+    ax[1].legend(loc=0, fontsize=fs-5)
 
     ax[1].set_xlabel(r"$Z \ [cm]$", fontsize=fs)
     ax[1].set_ylabel(r"$2|B|^2/c \ [1/cm]$", fontsize=fs)
@@ -201,7 +211,7 @@ if calculate and plots:
     ax2 = ax.twinx()
     ax2.yaxis.set_tick_params(labelsize=fs-5)
 
-    ax.plot(xi, np.abs(Gammaxi), "k-", label=r"$F(\xi)$")
+    ax.plot(xi, np.abs(Gammaxi), "k-", label=r"$\Gamma'(\xi)$")
     ax2.plot(xi, np.abs(S0xi), "b-", label=r"$S(\tau=0, \xi)$")
     ax2.plot(xi, np.abs(Sfxi), "g-", label=r"$S(\tau=\tau_f, \xi)$")
 
