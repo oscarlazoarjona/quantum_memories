@@ -155,25 +155,41 @@ if calculate:
     dump([tau, Z, Bw, Sw], open(folder+"solution_write.pickle", "wb"))
     dump([tau, Z, Br, Sr], open(folder+"solution_read.pickle", "wb"))
 if calculate and plots:
-    fs = 25
+    fs = 15
     ######################################################################
-    fig, ax1 = plt.subplots()
+    fig, ax = plt.subplots(2, 1, figsize=(8, 8))
+    ax1 = ax[0]
+    ax1.xaxis.set_tick_params(labelsize=fs-5)
+    ax1.yaxis.set_tick_params(labelsize=fs-5)
     ax2 = ax1.twinx()
+    ax2.yaxis.set_tick_params(labelsize=fs-5)
+
+    delay = tau[-1] - tau[0]
+
     ax1.plot(tau*1e9, np.abs(Sw[:, 0])**2*1e-9, "b-", label="Input")
     ax1.plot(tau*1e9, np.abs(Sw[:, -1])**2*1e-9, "r-", label="Leaked")
-    ax1.plot(tau*1e9, np.abs(Sr[:, -1])**2*1e-9, "g-", label="Output")
+    ax1.plot((tau+delay)*1e9, np.abs(Sr[:, -1])**2*1e-9, "g-", label="Output")
 
     angle1 = np.unwrap(np.angle(Sw[:, 0]))/2/np.pi
     angle2 = np.unwrap(np.angle(Sw[:, -1]))/2/np.pi
     angle3 = np.unwrap(np.angle(Sr[:, -1]))/2/np.pi
     ax2.plot(tau*1e9, angle1, "b:")
     ax2.plot(tau*1e9, angle2, "r:")
-    ax2.plot(tau*1e9, angle3, "g:")
+    ax2.plot((tau+delay)*1e9, angle3, "g:")
 
     ax1.set_xlabel(r"$\tau \ [ns]$", fontsize=fs)
     ax1.set_ylabel(r"$|S|^2$  [1/ns]", fontsize=fs)
     ax2.set_ylabel(r"Phase  [revolutions]", fontsize=fs)
-    ax1.legend(loc=6)
+    ax1.legend(loc=0, fontsize=fs)
+
+    ax[1].plot(Z*100, np.abs(Bw[0, :])**2 * 2/c*1e-2, "b-", label="Input")
+    ax[1].plot(Z*100, np.abs(Bw[-1, :])**2 * 2/c*1e-2, "g-", label="Storage")
+    ax[1].plot(Z*100, np.abs(Br[-1, :])**2 * 2/c*1e-2, "r-", label="Leakage")
+    ax[1].legend(loc=0, fontsize=fs)
+
+    ax[1].set_xlabel(r"$Z \ [cm]$", fontsize=fs)
+    ax[1].set_ylabel(r"$2|B|^2/c \ [1/cm]$", fontsize=fs)
+
     plt.savefig(folder+"high_efficiency.png", bbox_inches="tight")
     plt.close()
 
