@@ -13,13 +13,14 @@ from matplotlib import pyplot as plt
 from quantum_memories.misc import (time_bandwith_product)
 from quantum_memories.graphical import sketch_frame_transform
 from quantum_memories.orca import (set_parameters_ladder,
-                                   calculate_pulse_energy, print_params,
+                                   print_params,
                                    build_mesh_fdm,
-                                   calculate_xi0, calculate_F,
-                                   calculate_optimal_input_xi, num_integral,
-                                   calculate_optimal_input_Z,
-                                   calculate_optimal_input_tau,
-                                   solve)
+                                   calculate_xi0)
+# from quantum_memories.orca import (calculate_pulse_energy, calculate_F,
+#                                    calculate_optimal_input_xi, num_integral,
+#                                    calculate_optimal_input_Z,
+#                                    calculate_optimal_input_tau,
+#                                    solve)
 from scipy.constants import c
 
 # We establish base parameters.
@@ -27,7 +28,7 @@ folder = "__01__high_efficiency/"
 name = ""
 plots = False; calculate = False
 plots = True
-calculate = True
+# calculate = True
 
 # Set the memory parameters.
 if True:
@@ -64,9 +65,9 @@ if True:
     # We use the analytic theory to calculate the optimal pulse energy,
     # (that would allow unit efficiency for a narrowband signal and an
     # infinite cell.)
-    Ecrit = calculate_pulse_energy(params)
-    # We set the pulse energy to that value.
-    params["energy_pulse2"] = Ecrit
+    # Ecrit = calculate_pulse_energy(params)
+    # # We set the pulse energy to that value.
+    # params["energy_pulse2"] = Ecrit
     ########################################################################
     print_params(params)
     print("")
@@ -81,24 +82,24 @@ if True:
     Deltaxi = 2/c/tauw
     xi = np.linspace(xi0-4*Deltaxi/2, xi0+4*Deltaxi/2, 1001)
 
-    Gammaxi = calculate_F(params, xi)
-    xi, S0xi = calculate_optimal_input_xi(params, xi)
-    Sfxi = Gammaxi*S0xi
-
-    # The initial normalization of the xi signal (instead of integrating).
-    N0 = c/2
-    Nf = num_integral(np.abs(Sfxi)**2, xi)
-    eta_ana = Nf/N0
-
-    print("Critical energy: {:.2f} nJ".format(Ecrit*1e9))
-    print("Analytic-theory efficiency: {:.4f}".format(eta_ana))
-
-    ########################################################################
-    # In Z-space
-    Z__, S0Z = calculate_optimal_input_Z(params)
-    ########################################################################
-    # In tau-space
-    tau, S0tau = calculate_optimal_input_tau(params)
+    # Gammaxi = calculate_F(params, xi)
+    # xi, S0xi = calculate_optimal_input_xi(params, xi)
+    # Sfxi = Gammaxi*S0xi
+    #
+    # # The initial normalization of the xi signal (instead of integrating).
+    # N0 = c/2
+    # Nf = num_integral(np.abs(Sfxi)**2, xi)
+    # eta_ana = Nf/N0
+    #
+    # print("Critical energy: {:.2f} nJ".format(Ecrit*1e9))
+    # print("Analytic-theory efficiency: {:.4f}".format(eta_ana))
+    #
+    # ########################################################################
+    # # In Z-space
+    # Z__, S0Z = calculate_optimal_input_Z(params)
+    # ########################################################################
+    # # In tau-space
+    # tau, S0tau = calculate_optimal_input_tau(params)
 
 # # We calculate the write-in process.
 if calculate:
