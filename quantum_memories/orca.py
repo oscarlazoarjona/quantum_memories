@@ -1168,6 +1168,7 @@ def eqs_fdm(params, tau, Z, Xit="square", case=0, adiabatic=True,
         Gamma32 = calculate_Gamma32(params)
         kappa = calculate_kappa(params)
         Xi0 = calculate_Xi(params)
+        delta1 = params["delta1"]
 
         g21 = calculate_g21(params)
         g32Delta = calculate_g32Delta(params)
@@ -1179,6 +1180,11 @@ def eqs_fdm(params, tau, Z, Xit="square", case=0, adiabatic=True,
 
         nX = nv*Nt*Nz
         Ntz = Nt*Nz
+    # We build OmegaBSt.
+    if Xit != "square":
+        def OmegaBSt(tau):
+            return Xit(tau)*delta1*kappa/2/np.abs(Gamma21)**2
+
     # We build the derivative matrices.
     if True:
         args = [tau, Z]
@@ -1206,18 +1212,14 @@ def eqs_fdm(params, tau, Z, Xit="square", case=0, adiabatic=True,
         Xitauz = Xi0*np.sqrt(tauw)
         Xitauz *= np.outer(Xit(tau), w0Xi/wXi).flatten()
 
-        raise NotImplementedError
-        # It should be something like this:
-        # OmegaBStauz = OmegaBS0*np.sqrt(tauw)
-        # OmegaBStauz *= np.outer(OmegaBSt(tau), w0Xi/wXi).flatten()
+        OmegaBStauz = OmegaBS0*np.sqrt(tauw)
+        OmegaBStauz *= np.outer(OmegaBSt(tau), w0Xi/wXi).flatten()
     else:
         Xitauz = Xi0*np.sqrt(tauw)
         Xitauz *= np.outer(Xit(tau), np.ones(Nz)).flatten()
 
-        raise NotImplementedError
-        # It should be something like this:
-        # OmegaBStauz = OmegaBS0*np.sqrt(tauw)
-        # OmegaBStauz *= np.outer(OmegaBSt(tau), np.ones(Nz)).flatten()
+        OmegaBStauz = OmegaBS0*np.sqrt(tauw)
+        OmegaBStauz *= np.outer(OmegaBSt(tau), np.ones(Nz)).flatten()
 
     if sparse:
         eye = sp_eye(Ntz, format=bfmt)
@@ -1470,8 +1472,6 @@ def solve(params, S0t=None, S0z=None, B0z=None, P0z=None, Xit="square",
         params, Z, tau, tau1, tau2, tau3 = aux
         Nt = params["Nt"]
         Nz = params["Nz"]
-        kappa = calculate_kappa(params)
-        Gamma21 = calculate_Gamma21(params)
         Gamma32 = calculate_Gamma32(params)
 
         delta_disp = calculate_delta_disp(params)
@@ -1489,6 +1489,7 @@ def solve(params, S0t=None, S0z=None, B0z=None, P0z=None, Xit="square",
             P = np.zeros((Nt, Nz), complex)
         B = np.zeros((Nt, Nz), complex)
         S = np.zeros((Nt, Nz), complex)
+
     # We solve in the initial region.
     if True:
         if verbose > 0: t000f = time()
@@ -1501,7 +1502,7 @@ def solve(params, S0t=None, S0z=None, B0z=None, P0z=None, Xit="square",
         if seed == "S":
             sigs = taus/(2*np.sqrt(2*np.log(2)))*np.sqrt(2)
             S_exact1 = hermite_gauss(nshg, -t0s + ttau1 - 2*ZZ1/c, sigs)
-            S_exact1 = S_exact1*np.exp(-(ZZ1+L/2)*kappa**2/Gamma21)
+            S_exact1 = S_exact1*np.exp(-(ZZ1+L/2)*2*1j*delta_disp*g21/c)
             S[:Nt1, :] = S_exact1
         elif seed == "B":
             nshg = nshg + 1
@@ -1509,7 +1510,6 @@ def solve(params, S0t=None, S0z=None, B0z=None, P0z=None, Xit="square",
             B[:Nt1, :] = B_exact1
         elif S0t is not None or S0z is not None or B0z is not None:
             # These solutions come from the Other analytic solutions appendix.
-
             if S0t is not None:
                 S0t_interp = interpolator(tau, S0t, kind="cubic")
                 S_exact1 = S0t_interp(ttau1 - 2*(ZZ1+L/2)/c)
@@ -1554,7 +1554,7 @@ def solve(params, S0t=None, S0z=None, B0z=None, P0z=None, Xit="square",
                 # We calculate the gaussian standard deviation.
                 B02z = np.zeros(Nz, complex)
                 S02z = hermite_gauss(nshg, tau2[0] - t0s - 2*Z/c, sigs)
-                S02z = S02z*np.exp(-(Z+L/2)*kappa**2/Gamma21)
+                S02z = S02z*np.exp(-(Z+L/2)*2*1j*delta_disp*g21/c)
                 S02t = hermite_gauss(nshg, tau2 - t0s + L/c, sigs)
             else:
                 raise ValueError
@@ -1593,6 +1593,7 @@ def solve(params, S0t=None, S0z=None, B0z=None, P0z=None, Xit="square",
         if verbose > 0: t000f = time()
         B03z = B[Nt1+Nt2-2, :]
         S03z = S[Nt1+Nt2-2, :]
+
         if seed == "S":
             S03t = hermite_gauss(nshg, tau3 - t0s + L/c, sigs)
         elif S0t is not None:
@@ -1665,6 +1666,8 @@ def solve(params, S0t=None, S0z=None, B0z=None, P0z=None, Xit="square",
             S[Nt1+Nt2-2:] = S3
 
         if verbose > 0: print("region 3 time : {:.3f} s".format(time()-t000f))
+
+
     if verbose > 0:
         print("Full exec time: {:.3f} s".format(time()-t00f))
     # Plotting.
@@ -1864,6 +1867,16 @@ def check_fdm(params, B, S, tau, Z, P=None,
     Sgerr = np.zeros(B.shape)
 
     print("the log_10 of relative and global errors (for B and S):")
+    ####################################################################
+    # kwargs = {"case": 1, "folder": folder, "plots": False}
+    # aux = check_block_fdm(params, B1, S1, tau1, Z, **kwargs)
+    # checks1_rerr, checks1_gerr, B1rerr, S1rerr, B1gerr, S1gerr = aux
+    #
+    # Brerr[:N1] = B1rerr
+    # Srerr[:N1] = S1rerr
+    # Bgerr[:N1] = B1gerr
+    # Sgerr[:N1] = S1gerr
+
     ####################################################################
     kwargs = {"case": 2, "folder": folder, "plots": False}
     aux = check_block_fdm(params, B2, S2, tau2, Z, **kwargs)
