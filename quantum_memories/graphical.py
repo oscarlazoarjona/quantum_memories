@@ -262,18 +262,18 @@ def plot_inout(tau, Z, Bw, Sw, Br, Sr, folder, name):
     plt.close("all")
 
 
-def plot_Omegatz(params, Omegatz, tau2, Z, folder, name):
+def plot_Xitz(params, Xitz, tau2, Z, folder, name):
     r"""Make a plot of the Rabi frequency."""
-    from quantum_memories.orca import calculate_Omega
+    from quantum_memories.orca import calculate_Xi
     from quantum_memories.misc import heaviside_pi
     tauw = params["tauw"]
     t0w = params["t0w"]
-    Nt, Nz = Omegatz.shape
-    Omegat = Omegatz[:, Nz//2]
-    Omegaz = Omegatz[Nt//2, :]
-    Omega0 = calculate_Omega(params)
+    Nt, Nz = Xitz.shape
+    Xit = Xitz[:, Nz//2]
+    Xiz = Xitz[Nt//2, :]
+    Xi0 = calculate_Xi(params)
     tau2_cont = np.linspace(tau2[0], tau2[-1], 1001)
-    Omegat_equiv = Omega0*heaviside_pi((tau2_cont-t0w)/tauw)
+    Xit_equiv = Xi0*heaviside_pi((tau2_cont-t0w)/tauw)
 
     fig = plt.figure(figsize=(9, 9))
     xsizes = [1, 2]
@@ -290,10 +290,10 @@ def plot_Omegatz(params, Omegatz, tau2, Z, folder, name):
     ax11.set_yticks([])
 
     lab = r"$|\Xi(\tau=0, Z)|$"
-    ax01.plot(Z*1e2, np.abs(Omegaz)/2/np.pi*1e-9, "r", label=lab)
+    ax01.plot(Z*1e2, np.abs(Xiz)/2/np.pi*1e-9, "r", label=lab)
     lab = r"$|\Xi(\tau, Z=0)|$"
-    ax10.plot(np.abs(Omegat)/2/np.pi*1e-9, tau2*1e9, "r", label=lab)
-    ax10.plot(np.abs(Omegat_equiv)/2/np.pi*1e-9, tau2_cont*1e9,
+    ax10.plot(np.abs(Xit)/2/np.pi*1e-9, tau2*1e9, "r", label=lab)
+    ax10.plot(np.abs(Xit_equiv)/2/np.pi*1e-9, tau2_cont*1e9,
               "k-", alpha=0.5, label=r"$|\Xi_{\mathrm{equiv}}|$")
 
     ax01.set_ylim(0, None)
@@ -301,7 +301,7 @@ def plot_Omegatz(params, Omegatz, tau2, Z, folder, name):
     ax01.legend()
     ax10.legend()
 
-    cb = ax11.pcolormesh(Z*100, tau2*1e9, np.abs(Omegatz)/2/np.pi*1e-9,
+    cb = ax11.pcolormesh(Z*100, tau2*1e9, np.abs(Xitz)/2/np.pi*1e-9,
                          shading="auto", vmin=0)
     fig.colorbar(cb, label=r"$|\Xi|$  [GHz]", ax=ax10)
 

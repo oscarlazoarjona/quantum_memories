@@ -1,12 +1,11 @@
 # -*- coding: utf-8 -*-
 # Copyright (C) 2017-2021 Oscar Gerardo Lazo Arjona
 # mailto: oscar.lazoarjona@physics.ox.ac.uk
-
 """A setuptools based setup module."""
 
 # When updating the version remember to also update in
 # quantum_memories/__init__.py
-__version__ = "1.1"
+__version__ = "1.2"
 
 # Always prefer setuptools over distutils
 from setuptools import setup, find_packages
@@ -28,8 +27,8 @@ setup(
     # https://packaging.python.org/en/latest/single_source_version.html
     version=__version__,
 
-    description=r"""a repository for solvers for the Maxwell-Bloch equations \
-    of various quantum memories, and calculations using them""",
+    description=r"""A repository for solvers for the Maxwell-Bloch equations \
+    of various quantum memories, and calculations using them.""",
     long_description=long_description,
 
     # The project's main homepage.

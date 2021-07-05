@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2016 - 2017 Oscar Gerardo Lazo Arjona
-#                      2017 Benjamin Brecht
+# Copyright (C) 2016 - 2021 Oscar Gerardo Lazo Arjona
 # mailto: oscar.lazoarjona@physics.ox.ac.uk
-# mailto: benjamin.brecht@physics.ox.ac.uk
 r"""This is a repository for solvers for the Maxwell-Bloch equations of \
 various quantum memories, and calculations using them.
 """
