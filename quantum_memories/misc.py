@@ -100,6 +100,10 @@ def iffftfft(f, nu):
     Deltanu = nu[-1]-nu[0]
     return np.fft.fftshift(np.fft.ifft(np.fft.ifftshift(f)))*Deltanu
 
+
+def memory_size(A):
+    r"""Get the size of sparse matrix A in Megabytes."""
+    return (A.data.nbytes + A.indptr.nbytes + A.indices.nbytes)/2.0**20
 ##############################################################################
 # Mode shape routines.
 
