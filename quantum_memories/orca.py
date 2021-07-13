@@ -18,7 +18,8 @@ from quantum_memories.misc import (time_bandwith_product,
                                    ffftfreq, iffftfft, interpolator, sinc,
                                    hermite_gauss, num_integral, build_Z_mesh,
                                    build_t_mesh, build_mesh_fdm, harmonic,
-                                   rel_error, glo_error, get_range)
+                                   rel_error, glo_error, get_range,
+                                   memory_size)
 
 from quantum_memories.fdm import (derivative_operator,
                                   fdm_derivative_operators, bfmt, bfmtf,
@@ -1234,7 +1235,8 @@ def eqs_fdm(params, tau, Z, Xit="square", case=0, adiabatic=True,
 
         OmegaBS = np.diag(OmegaBStauz)
 
-    # We build the A matrix.
+    #################################################################
+    # We build the equations here!
     if True:
         # Empty space.
         if case == 0 and adiabatic:
@@ -1291,8 +1293,8 @@ def eqs_fdm(params, tau, Z, Xit="square", case=0, adiabatic=True,
             A = set_block(A, 0, 0, Gamma21*eye)
             A = set_block(A, 1, 1, Gamma32*eye)
             A = set_block(A, 2, 2, c/2*DZ)
-            A = set_block(A, 0, 2, 1j*kappa*eye)
-            A = set_block(A, 2, 0, 1j*kappa*c/2*eye)
+            A = set_block(A, 0, 2, 1j*kappa/2*eye)
+            A = set_block(A, 2, 0, 1j*kappa/2*eye)
         elif case == 2 and not adiabatic:
             # We set the time derivatives.
             A = set_block(A, 0, 0, DT)
@@ -1303,12 +1305,12 @@ def eqs_fdm(params, tau, Z, Xit="square", case=0, adiabatic=True,
             A = set_block(A, 0, 0, Gamma21*eye)
             A = set_block(A, 1, 1, Gamma32*eye)
             A = set_block(A, 2, 2, c/2*DZ)
-            A = set_block(A, 0, 2, 1j*kappa*eye)
-            A = set_block(A, 2, 0, 1j*kappa*c/2*eye)
+            A = set_block(A, 0, 2, 1j*kappa/2*eye)
+            A = set_block(A, 2, 0, 1j*kappa/2*eye)
 
-            A = set_block(A, 0, 1, 1j*np.conjugate(Xi))
-            A = set_block(A, 1, 0, 1j*Xi)
-
+            A = set_block(A, 0, 1, 1j*np.conjugate(Xi)/2)
+            A = set_block(A, 1, 0, 1j*Xi/2)
+    #################################################################
     if plots:
         ################################################################
         # Plotting Wp.
@@ -1322,7 +1324,7 @@ def eqs_fdm(params, tau, Z, Xit="square", case=0, adiabatic=True,
 
 
 def solve_fdm_block(params, S0t, S0z, B0z, tau, Z, P0z=None, Xit="square",
-                    case=0, method=0, pt=4, pz=4,
+                    case=0, method=0, pt=4, pz=4, adiabatic=True,
                     plots=False, folder="", name="", verbose=0):
     r"""We solve using the finite difference method for given
     boundary conditions, and with time and space precisions `pt` and `pz`.
@@ -1378,7 +1380,10 @@ def solve_fdm_block(params, S0t, S0z, B0z, tau, Z, P0z=None, Xit="square",
         # Nt_prop = pt + 1
 
         # The number of functions.
-        nv = 2
+        if adiabatic:
+            nv = 2
+        else:
+            nv = 3
     # We make pre-calculations.
     if True:
         if P0z is not None:
@@ -1394,7 +1399,7 @@ def solve_fdm_block(params, S0t, S0z, B0z, tau, Z, P0z=None, Xit="square",
         aux1 = [params, tau, Z]
         aux2 = {"Xit": Xit, "pt": pt, "pz": pz, "case": case,
                 "folder": folder, "plots": False, "sparse": sparse,
-                "adiabatic": P0z is None}
+                "adiabatic": adiabatic}
         t00 = time()
         A = eqs_fdm(*aux1, **aux2)
         if verbose > 0: print("FDM Eqs time  : {:.3f} s".format(time()-t00))
@@ -1403,14 +1408,18 @@ def solve_fdm_block(params, S0t, S0z, B0z, tau, Z, P0z=None, Xit="square",
         # We get the input indices.
         t00 = time()
         auxi = np.arange(nv*Nt*Nz).reshape((nv, Nt, Nz))
-        indsB0 = auxi[0, 0, :].tolist()
-        indsQ0 = np.flip(auxi[1, 0, :]).tolist()
-        indsS0 = auxi[1, :, 0].tolist()
+        if adiabatic:
+            corr = 0
+        else:
+            corr = 1
+        indsB0 = auxi[corr, 0, :].tolist()
+        indsQ0 = np.flip(auxi[1+corr, 0, :]).tolist()
+        indsS0 = auxi[1+corr, :, 0].tolist()
         inds0_ = indsB0 + indsQ0 + indsS0
 
-        indsBf = auxi[0, -1, :].tolist()
-        indsSf = auxi[1, :, -1].tolist()
-        indsQf = np.flip(auxi[1, -1, :]).tolist()
+        indsBf = auxi[corr, -1, :].tolist()
+        indsSf = auxi[1+corr, :, -1].tolist()
+        indsQf = np.flip(auxi[1+corr, -1, :]).tolist()
         indsf_ = indsBf + indsSf + indsQf
         indsf_ = auxi.flatten().tolist()
 
@@ -1420,8 +1429,14 @@ def solve_fdm_block(params, S0t, S0z, B0z, tau, Z, P0z=None, Xit="square",
         input[Nz:2*Nz, 0] = np.flip(S0z)
         input[2*Nz:, 0] = S0t
 
+        if verbose > 0:
+            mes = "Matrix A ({}x{}x{}) x ({}x{}x{}) takes {:.1f} Mb"
+            print(mes.format(nv, Nt, Nz, nv, Nt, Nz, memory_size(A)))
         Y = solve_fdm(A, inds0_, indsf_, input=input)
-        B, S = np.reshape(Y, (nv, Nt, Nz))
+        if adiabatic:
+            B, S = np.reshape(Y, (nv, Nt, Nz))
+        else:
+            P, B, S = np.reshape(Y, (nv, Nt, Nz))
         if verbose > 0: print("FDM Sol time  : {:.3f} s".format(time()-t00))
         #############
 
@@ -1451,20 +1466,16 @@ def solve_fdm_block(params, S0t, S0z, B0z, tau, Z, P0z=None, Xit="square",
         plt.savefig(aux, bbox_inches="tight")
         plt.close("all")
 
-    if P0z is not None:
-        return P, B, S
-    else:
-        return B, S
+    return B, S
 
 
 def solve(params, S0t=None, S0z=None, B0z=None, P0z=None, Xit="square",
-          method=0, pt=4, pz=4,
+          method=0, pt=4, pz=4, adiabatic=True,
           folder="", name="", plots=False, verbose=0,
           seed=None, analytic_storage=True, return_modes=False):
     r"""We solve using the finite difference method for given
     boundary conditions, and with time and space precisions `pt` and `pz`.
     """
-    adiabatic = P0z is None
     t00f = time()
     # We unpack parameters.
     if True:
@@ -1485,8 +1496,8 @@ def solve(params, S0t=None, S0z=None, B0z=None, P0z=None, Xit="square",
         Nt3 = tau3.shape[0]
 
         # We initialize the solution.
-        if not adiabatic:
-            P = np.zeros((Nt, Nz), complex)
+        # if not adiabatic:
+        #     P = np.zeros((Nt, Nz), complex)
         B = np.zeros((Nt, Nz), complex)
         S = np.zeros((Nt, Nz), complex)
 
@@ -1575,17 +1586,13 @@ def solve(params, S0t=None, S0z=None, B0z=None, P0z=None, Xit="square",
 
         aux1 = [params_memory, S02t, S02z, B02z, tau2, Z]
         aux2 = {"Xit": Xit, "method": method, "pt": pt, "pz": pz,
+                "adiabatic": adiabatic,
                 "folder": folder, "plots": False,
                 "verbose": verbose-1, "P0z": P0z, "case": 2}
-        if adiabatic:
-            B2, S2 = solve_fdm_block(*aux1, **aux2)
-            B[Nt1-1:Nt1+Nt2-1] = B2
-            S[Nt1-1:Nt1+Nt2-1] = S2
-        else:
-            P2, B2, S2 = solve_fdm_block(*aux1, **aux2)
-            P[Nt1-1:Nt1+Nt2-1] = P2
-            B[Nt1-1:Nt1+Nt2-1] = B2
-            S[Nt1-1:Nt1+Nt2-1] = S2
+
+        B2, S2 = solve_fdm_block(*aux1, **aux2)
+        B[Nt1-1:Nt1+Nt2-1] = B2
+        S[Nt1-1:Nt1+Nt2-1] = S2
 
         if verbose > 0: print("region 2 time : {:.3f} s".format(time()-t000f))
     # We solve in the storage region.
@@ -1605,7 +1612,8 @@ def solve(params, S0t=None, S0z=None, B0z=None, P0z=None, Xit="square",
         params_storage["Nt"] = Nt3
         aux1 = [params_storage, S03t, S03z, B03z, tau3, Z]
         aux2 = {"pt": pt, "pz": pz, "folder": folder, "plots": False,
-                "verbose": 1, "P0z": P0z, "case": 1}
+                "adiabatic": adiabatic,
+                "verbose": 0, "P0z": P0z, "case": 1}
 
         # We calculate analyticaly.
         if adiabatic:
@@ -1660,14 +1668,11 @@ def solve(params, S0t=None, S0z=None, B0z=None, P0z=None, Xit="square",
             else:
                 raise ValueError
         else:
-            P3, B3, S3 = solve_fdm_block(*aux1, **aux2)
-            P[Nt1+Nt2-2:] = P3
+            B3, S3 = solve_fdm_block(*aux1, **aux2)
             B[Nt1+Nt2-2:] = B3
             S[Nt1+Nt2-2:] = S3
 
         if verbose > 0: print("region 3 time : {:.3f} s".format(time()-t000f))
-
-
     if verbose > 0:
         print("Full exec time: {:.3f} s".format(time()-t00f))
     # Plotting.
@@ -1707,17 +1712,14 @@ def solve(params, S0t=None, S0z=None, B0z=None, P0z=None, Xit="square",
         plt.savefig(folder+"solution_fdm_"+name+".png", bbox_inches="tight")
         plt.close("all")
 
-    if adiabatic:
-        if return_modes:
-            B0 = B02z
-            S0 = S[:, 0]
-            B1 = B03z
-            S1 = S[:, -1]
-            return tau, Z, B0, S0, B1, S1
-        else:
-            return tau, Z, B, S
+    if return_modes:
+        B0 = B02z
+        S0 = S[:, 0]
+        B1 = B03z
+        S1 = S[:, -1]
+        return tau, Z, B0, S0, B1, S1
     else:
-        return tau, Z, P, B, S
+        return tau, Z, B, S
 
 
 def check_block_fdm(params, B, S, tau, Z, case=0, P=None,
