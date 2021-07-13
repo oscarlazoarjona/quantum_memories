@@ -716,7 +716,7 @@ def calculate_delta_disp(params):
     Gamma21 = calculate_Gamma21(params)
     kappa = calculate_kappa(params)
 
-    return -delta1*np.abs(kappa)**2/4/np.abs(Gamma21)**2
+    return delta1*np.abs(kappa)**2/4/np.abs(Gamma21)**2
 
 
 def calculate_Delta(params):
