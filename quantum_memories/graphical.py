@@ -12,7 +12,7 @@ from scipy.constants import c
 
 
 def sketch_frame_transform(params, folder="", name="sketch",
-                           draw_readout=False, auxiliaries=False):
+                           draw_readout=False, auxiliaries=False, fmt=".png"):
     r"""Make a sketech of the frame transform."""
     def transform(x):
         t, z = x
@@ -158,7 +158,7 @@ def sketch_frame_transform(params, folder="", name="sketch",
         plt.ylabel(r"$\tau \ \mathrm{(ns)}$", fontsize=15)
         plt.xlabel(r"$Z' \ \mathrm{(cm)}$", fontsize=15)
         # plt.ylim(None, 1.5)
-        plt.savefig(folder+name+".png", bbox_inches="tight")
+        plt.savefig(folder+name+fmt, bbox_inches="tight")
         plt.close()
 
 
