@@ -1181,10 +1181,6 @@ def eqs_fdm(params, tau, Z, Xit="square", case=0, adiabatic=True,
 
         nX = nv*Nt*Nz
         Ntz = Nt*Nz
-    # We build OmegaBSt.
-    if Xit != "square":
-        def OmegaBSt(tau):
-            return Xit(tau)*delta1*kappa/2/np.abs(Gamma21)**2
 
     # We build the derivative matrices.
     if True:
@@ -1209,18 +1205,19 @@ def eqs_fdm(params, tau, Z, Xit="square", case=0, adiabatic=True,
     if Xit == "square":
         Xitauz = np.outer(np.ones(Nt), Xiz).flatten()
         OmegaBStauz = np.outer(np.ones(Nt), OmegaBSz).flatten()
+
     elif with_focusing:
         Xitauz = Xi0*np.sqrt(tauw)
         Xitauz *= np.outer(Xit(tau), w0Xi/wXi).flatten()
 
         OmegaBStauz = OmegaBS0*np.sqrt(tauw)
-        OmegaBStauz *= np.outer(OmegaBSt(tau), w0Xi/wXi).flatten()
+        OmegaBStauz *= np.outer(Xit(tau), w0Xi/wXi).flatten()
     else:
         Xitauz = Xi0*np.sqrt(tauw)
         Xitauz *= np.outer(Xit(tau), np.ones(Nz)).flatten()
 
         OmegaBStauz = OmegaBS0*np.sqrt(tauw)
-        OmegaBStauz *= np.outer(OmegaBSt(tau), np.ones(Nz)).flatten()
+        OmegaBStauz *= np.outer(Xit(tau), np.ones(Nz)).flatten()
 
     if sparse:
         eye = sp_eye(Ntz, format=bfmt)
@@ -1694,6 +1691,7 @@ def solve(params, S0t=None, S0z=None, B0z=None, P0z=None, Xit="square",
         plt.savefig(folder+"Sft_"+name+".png", bbox_inches="tight")
         plt.close()
 
+        ####################################################################
         plt.figure(figsize=(15, 9))
         plt.subplot(1, 2, 1)
         plt.title("$B$ FDM")
@@ -1701,6 +1699,11 @@ def solve(params, S0t=None, S0z=None, B0z=None, P0z=None, Xit="square",
         plt.colorbar(cs)
         plt.ylabel(r"$\tau$ (ns)")
         plt.xlabel("$Z$ (cm)")
+        ###################################
+        # Adding lines to indicate regions.
+        # plt.plot([Z[0]*100, Z[-1]*100], [tau2[0]*1e9, tau2[0]*1e9], "r-")
+        # plt.plot([Z[0]*100, Z[-1]*100], [tau2[-1]*1e9, tau2[-1]*1e9], "r-")
+        # plt.ylim(-1.5, 1.5)
 
         plt.subplot(1, 2, 2)
         plt.title("$S$ FDM")
@@ -1708,6 +1711,12 @@ def solve(params, S0t=None, S0z=None, B0z=None, P0z=None, Xit="square",
         plt.colorbar(cs)
         plt.ylabel(r"$\tau$ (ns)")
         plt.xlabel("$Z$ (cm)")
+
+        ###################################
+        # Adding lines to indicate regions.
+        # plt.plot([Z[0]*100, Z[-1]*100], [tau2[0]*1e9, tau2[0]*1e9], "r-")
+        # plt.plot([Z[0]*100, Z[-1]*100], [tau2[-1]*1e9, tau2[-1]*1e9], "r-")
+        # plt.ylim(-1.5, 1.5)
 
         plt.savefig(folder+"solution_fdm_"+name+".png", bbox_inches="tight")
         plt.close("all")
