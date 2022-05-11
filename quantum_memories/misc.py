@@ -455,15 +455,15 @@ def build_mesh_fdm(params, verbose=0):
     ntauw = params["ntauw"]
     N = params["N"]
     Z = build_Z_mesh(params)
-    D = Z[-1] - Z[0]
+    L = Z[-1] - Z[0]
     # We calculate NtOmega and Nz such that we have approximately
     # NtOmega*Nz = N**2
-    NtOmega = int(round(N*np.sqrt(c*ntauw*tauw/2/D)))
-    Nz = int(round(N*np.sqrt(2*D/c/ntauw/tauw)))
+    NtOmega = int(round(N*np.sqrt(c*ntauw*tauw/2/L)))
+    Nz = int(round(N*np.sqrt(2*L/c/ntauw/tauw)))
 
     dt = ntauw*tauw/(NtOmega-1)
     # We calculate a t0w that is approximately at 3/2*ntauw*tauw + 2*D/c
-    Nt1 = int(round((ntauw*tauw + 2*D/c)/dt))+1
+    Nt1 = int(round((ntauw*tauw + 2*L/c)/dt))+1
 
     t01 = 0.0; tf1 = t01 + (Nt1-1)*dt
     t02 = tf1; tf2 = t02 + (NtOmega-1)*dt
@@ -499,7 +499,7 @@ def build_mesh_fdm(params, verbose=0):
         T1 = tau1[-1] - tau1[0]
         T2 = tau2[-1] - tau2[0]
         T3 = tau3[-1] - tau3[0]
-        T1_tar = ntauw*tauw + 2*D/c
+        T1_tar = ntauw*tauw + 2*L/c
         # dt1 = tau1[1] - tau1[0]
         # dt2 = tau2[1] - tau2[0]
         # dt3 = tau3[1] - tau3[0]
