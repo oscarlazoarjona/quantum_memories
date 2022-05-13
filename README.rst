@@ -4,13 +4,7 @@ This is a repository for solvers for the Maxwell-Bloch equations of
 various quantum memories, and calculations using them.
 
 For instance, the memory lifetime of the `ORCA
-<https://arxiv.org/abs/1704.00013/>`_ quantum memory can be accurately calculated:
-
-.. image:: https://raw.githubusercontent.com/oscarlazoarjona/quantum_memories/master/examples/hyperfine_orca/doppler_dephasing/doppler_dephasing.png
-
-as well as the memory efficiencies for different control powers
-
-.. image:: https://raw.githubusercontent.com/oscarlazoarjona/quantum_memories/master/examples/orca/control_energies/control_energies.png
+<https://arxiv.org/abs/1704.00013/>`_ quantum memory can be accurately calculated, as well as the memory efficiencies for different control powers.
 
 Installing
 --------
